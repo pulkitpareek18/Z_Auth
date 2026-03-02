@@ -1,0 +1,38 @@
+{
+  email {$CADDY_EMAIL}
+}
+
+auth.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-core:3000
+}
+
+verify.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-core:3000
+}
+
+api.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-core:3000
+}
+
+console.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-ui:3001
+}
+
+demo.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-ui:3001
+}
+
+notes.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-notes:3002
+}
+
+status.geturstyle.shop {
+  encode zstd gzip
+  reverse_proxy zauth-ui:3001
+}

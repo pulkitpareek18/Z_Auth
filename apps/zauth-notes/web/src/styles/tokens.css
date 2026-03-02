@@ -1,0 +1,102 @@
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap");
+
+:root {
+  color-scheme: light dark;
+  --font-display: "Google Sans", "Roboto", "Segoe UI", Arial, sans-serif;
+  --font-body: "Roboto", "Google Sans", "Segoe UI", Arial, sans-serif;
+
+  --color-bg: #eef3fb;
+  --color-bg-accent: #dbe7ff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7f9fc;
+  --color-surface-strong: #eef3ff;
+  --color-text: #1f1f1f;
+  --color-subtext: #444746;
+  --color-muted: #5f6368;
+  --color-line: #d2d7e0;
+  --color-line-strong: #c0c6d1;
+  --color-brand: #1a73e8;
+  --color-brand-hover: #0b57d0;
+  --color-brand-soft: #d3e3fd;
+  --color-brand-line: #b6cdfb;
+  --color-success: #137333;
+  --color-success-soft: #e6f4ea;
+  --color-danger: #c5221f;
+  --color-danger-soft: #fce8e6;
+  --color-warning: #b06000;
+  --color-warning-soft: #fef2de;
+  --color-shadow: 0 1px 2px rgba(28, 32, 38, 0.14), 0 2px 10px rgba(28, 32, 38, 0.08);
+
+  --radius-card: 28px;
+  --radius-panel: 18px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0d1117;
+    --color-bg-accent: #162b48;
+    --color-surface: #171b22;
+    --color-surface-soft: #1f242d;
+    --color-surface-strong: #20375d;
+    --color-text: #e8eaed;
+    --color-subtext: #c4c7c5;
+    --color-muted: #9aa0a6;
+    --color-line: #303744;
+    --color-line-strong: #465063;
+    --color-brand: #8ab4f8;
+    --color-brand-hover: #a8c7fa;
+    --color-brand-soft: #24344f;
+    --color-brand-line: #47638f;
+    --color-success: #81c995;
+    --color-success-soft: #173a28;
+    --color-danger: #f28b82;
+    --color-danger-soft: #5c2d2b;
+    --color-warning: #fbbc04;
+    --color-warning-soft: #443114;
+    --color-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: radial-gradient(circle at 10% -18%, var(--color-bg-accent) 0%, var(--color-bg) 42%, var(--color-bg) 100%);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}

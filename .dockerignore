@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+env/.env.dev
+env/.env.test
+env/.env.prod
+coverage
+.vscode
+.idea

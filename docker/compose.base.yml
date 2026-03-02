@@ -1,0 +1,126 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  zauth-core:
+    build:
+      context: ..
+      dockerfile: apps/zauth-core/Dockerfile
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      CORE_PORT: ${CORE_PORT}
+      CORE_HOST: ${CORE_HOST}
+      AUTH_ISSUER: ${AUTH_ISSUER}
+      API_BASE_URL: ${API_BASE_URL}
+      UI_BASE_URL: ${UI_BASE_URL}
+      VERIFY_BASE_URL: ${VERIFY_BASE_URL}
+      RP_ID: ${RP_ID}
+      EXPECTED_ORIGIN: ${EXPECTED_ORIGIN}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS}
+      TENANT_SALT: ${TENANT_SALT}
+      AUTH_DISABLE_SSO: ${AUTH_DISABLE_SSO:-true}
+      AUTH_REQUEST_TTL_SECONDS: ${AUTH_REQUEST_TTL_SECONDS:-900}
+      LIVENESS_MODE: ${LIVENESS_MODE}
+      LIVENESS_MIN_CONFIDENCE: ${LIVENESS_MIN_CONFIDENCE}
+      PRAMAAN_V2_ENABLED: ${PRAMAAN_V2_ENABLED}
+      AUTH_REQUIRE_ZK_FOR_LOGIN: ${AUTH_REQUIRE_ZK_FOR_LOGIN}
+      ZK_VERIFIER_MODE: ${ZK_VERIFIER_MODE}
+      ZK_CIRCUIT_ID: ${ZK_CIRCUIT_ID}
+      ZK_VERIFY_KEY_PATH: ${ZK_VERIFY_KEY_PATH}
+      ZK_REQUIRE_CHALLENGE_BINDING: ${ZK_REQUIRE_CHALLENGE_BINDING}
+      ANCHOR_ENABLED: ${ANCHOR_ENABLED}
+      ANCHOR_INTERVAL_HOURS: ${ANCHOR_INTERVAL_HOURS}
+      ANCHOR_CHAIN_RPC_URL: ${ANCHOR_CHAIN_RPC_URL}
+      ANCHOR_CHAIN_CONTRACT: ${ANCHOR_CHAIN_CONTRACT}
+      ANCHOR_PRIVATE_KEY: ${ANCHOR_PRIVATE_KEY}
+      ANCHOR_IPFS_API: ${ANCHOR_IPFS_API}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379
+      DEMO_CLIENT_ID: ${DEMO_CLIENT_ID}
+      DEMO_REDIRECT_URI: ${DEMO_REDIRECT_URI}
+      NOTES_CLIENT_ID: ${NOTES_CLIENT_ID}
+      NOTES_REDIRECT_URI: ${NOTES_REDIRECT_URI}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  zauth-ui:
+    build:
+      context: ..
+      dockerfile: apps/zauth-ui/Dockerfile
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      UI_PORT: ${UI_PORT}
+      AUTH_ISSUER: ${AUTH_ISSUER}
+      API_BASE_URL: ${API_BASE_URL}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      DEMO_CLIENT_ID: ${DEMO_CLIENT_ID}
+    depends_on:
+      zauth-core:
+        condition: service_started
+
+  zauth-notes:
+    build:
+      context: ..
+      dockerfile: apps/zauth-notes/Dockerfile
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      NOTES_PORT: ${NOTES_PORT}
+      NOTES_HOST: ${NOTES_HOST}
+      NOTES_BASE_URL: ${NOTES_BASE_URL}
+      NOTES_APP_ORIGIN: ${NOTES_APP_ORIGIN}
+      NOTES_CLIENT_ID: ${NOTES_CLIENT_ID}
+      NOTES_REDIRECT_URI: ${NOTES_REDIRECT_URI}
+      NOTES_REQUIRED_ACR: ${NOTES_REQUIRED_ACR}
+      NOTES_CSRF_SECRET: ${NOTES_CSRF_SECRET}
+      NOTES_LOGIN_RATE_WINDOW_MS: ${NOTES_LOGIN_RATE_WINDOW_MS}
+      NOTES_LOGIN_RATE_MAX: ${NOTES_LOGIN_RATE_MAX}
+      NOTES_CALLBACK_RATE_WINDOW_MS: ${NOTES_CALLBACK_RATE_WINDOW_MS}
+      NOTES_CALLBACK_RATE_MAX: ${NOTES_CALLBACK_RATE_MAX}
+      AUTH_ISSUER: ${AUTH_ISSUER}
+      AUTH_ISSUER_INTERNAL: ${AUTH_ISSUER_INTERNAL:-http://zauth-core:3000}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

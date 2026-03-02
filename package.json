@@ -1,0 +1,27 @@
+{
+  "name": "z-auth",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Z_Auth modular monolith with OAuth/OIDC and Pramaan identity primitives",
+  "workspaces": [
+    "apps/zauth-core",
+    "apps/zauth-ui",
+    "apps/zauth-notes"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:core": "npm run dev --workspace apps/zauth-core",
+    "dev:ui": "npm run dev --workspace apps/zauth-ui",
+    "dev:notes": "npm run dev --workspace apps/zauth-notes",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "up-dev": "docker compose -p zauth_dev -f docker/compose.base.yml -f docker/compose.dev.yml --env-file env/.env.dev up",
+    "up-prod": "docker compose -p zauth_prod -f docker/compose.base.yml -f docker/compose.prod.yml --env-file env/.env.prod up -d",
+    "down": "docker compose -p zauth_dev -f docker/compose.base.yml -f docker/compose.dev.yml --env-file env/.env.dev down",
+    "test-e2e": "docker compose -p zauth_test -f docker/compose.base.yml -f docker/compose.test.yml --env-file env/.env.test up --build --abort-on-container-exit --exit-code-from zauth-core-test",
+    "test-e2e:down": "docker compose -p zauth_test -f docker/compose.base.yml -f docker/compose.test.yml --env-file env/.env.test down -v"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}

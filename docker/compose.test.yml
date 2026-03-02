@@ -1,0 +1,57 @@
+services:
+  zauth-core-test:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -lc "npm install --workspace apps/zauth-core --workspace apps/zauth-ui --workspace apps/zauth-notes && npm run test --workspace apps/zauth-core && npm run test --workspace apps/zauth-ui && npm run test --workspace apps/zauth-notes"
+    volumes:
+      - ..:/workspace
+    environment:
+      NODE_ENV: test
+      CORE_PORT: 3000
+      CORE_HOST: 0.0.0.0
+      AUTH_ISSUER: http://zauth-core:3000
+      API_BASE_URL: http://zauth-core:3000
+      UI_BASE_URL: http://zauth-ui:3001
+      VERIFY_BASE_URL: http://zauth-core:3000
+      RP_ID: localhost
+      EXPECTED_ORIGIN: http://localhost:3000
+      SESSION_COOKIE_SECURE: false
+      SESSION_TTL_SECONDS: 28800
+      TENANT_SALT: test-salt
+      LIVENESS_MODE: mock
+      LIVENESS_MIN_CONFIDENCE: 0.72
+      PRAMAAN_V2_ENABLED: true
+      AUTH_REQUIRE_ZK_FOR_LOGIN: true
+      ZK_VERIFIER_MODE: mock
+      ZK_CIRCUIT_ID: biometric_commitment_v1
+      ZK_VERIFY_KEY_PATH: zk/verification_key.json
+      ZK_REQUIRE_CHALLENGE_BINDING: true
+      ANCHOR_ENABLED: false
+      ANCHOR_INTERVAL_HOURS: 24
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379
+      UI_PORT: 3001
+      DEMO_CLIENT_ID: demo-web-client
+      DEMO_REDIRECT_URI: http://zauth-ui:3001/callback
+      NOTES_PORT: 3002
+      NOTES_HOST: 0.0.0.0
+      NOTES_BASE_URL: http://zauth-notes:3002
+      NOTES_APP_ORIGIN: http://zauth-notes:3002
+      NOTES_CLIENT_ID: notes-web-client
+      NOTES_REDIRECT_URI: http://zauth-notes:3002/callback
+      NOTES_REQUIRED_ACR: urn:zauth:aal1
+      NOTES_CSRF_SECRET: notes-test-csrf-secret
+      NOTES_LOGIN_RATE_WINDOW_MS: 60000
+      NOTES_LOGIN_RATE_MAX: 20
+      NOTES_CALLBACK_RATE_WINDOW_MS: 60000
+      NOTES_CALLBACK_RATE_MAX: 40
+      AUTH_ISSUER_INTERNAL: http://zauth-core:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

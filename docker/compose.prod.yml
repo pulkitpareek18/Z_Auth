@@ -1,0 +1,75 @@
+services:
+  postgres:
+    restart: always
+    mem_limit: 1g
+    cpus: "0.50"
+
+  redis:
+    restart: always
+    mem_limit: 512m
+    cpus: "0.25"
+
+  zauth-core:
+    image: ${ZAUTH_CORE_IMAGE}
+    pull_policy: always
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 2g
+    cpus: "0.70"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/ready"]
+      interval: 20s
+      timeout: 4s
+      retries: 6
+
+  zauth-ui:
+    image: ${ZAUTH_UI_IMAGE}
+    pull_policy: always
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g
+    cpus: "0.35"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health/live"]
+      interval: 20s
+      timeout: 4s
+      retries: 6
+
+  zauth-notes:
+    image: ${ZAUTH_NOTES_IMAGE}
+    pull_policy: always
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g
+    cpus: "0.35"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health/live"]
+      interval: 20s
+      timeout: 4s
+      retries: 6
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: always
+    depends_on:
+      zauth-core:
+        condition: service_healthy
+      zauth-ui:
+        condition: service_healthy
+      zauth-notes:
+        condition: service_healthy
+    environment:
+      CADDY_EMAIL: ${CADDY_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config

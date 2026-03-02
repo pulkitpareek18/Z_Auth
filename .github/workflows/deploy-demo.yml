@@ -1,0 +1,35 @@
+name: deploy-demo
+
+on:
+  push:
+    branches: ["demo"]
+  workflow_dispatch:
+
+jobs:
+  deploy-demo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy demo stack over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            git fetch --all
+            git checkout ${{ github.sha }}
+            printf "%s" "${{ secrets.PROD_ENV_FILE }}" > env/.env.prod
+            export COMPOSE_PROJECT_NAME=zauth_demo
+            docker compose -f docker/compose.base.yml -f docker/compose.prod.yml --env-file env/.env.prod up -d --remove-orphans
+            AUTH_URL=https://auth.geturstyle.shop/health/ready \
+            DEMO_URL=https://demo.geturstyle.shop \
+            NOTES_URL=https://notes.geturstyle.shop \
+            STATUS_URL=https://status.geturstyle.shop/status-json \
+            ./scripts/smoke.sh

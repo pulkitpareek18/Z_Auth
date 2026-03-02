@@ -1,0 +1,67 @@
+services:
+  zauth-core:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -lc "npm install --workspace apps/zauth-core && npm run dev --workspace apps/zauth-core"
+    volumes:
+      - ..:/workspace
+      - zauth_core_node_modules:/workspace/node_modules
+      - zauth_core_app_node_modules:/workspace/apps/zauth-core/node_modules
+    ports:
+      - "3000:3000"
+
+  zauth-ui:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -lc "npm install --workspace apps/zauth-ui && npm run dev --workspace apps/zauth-ui"
+    volumes:
+      - ..:/workspace
+      - zauth_ui_node_modules:/workspace/node_modules
+      - zauth_ui_app_node_modules:/workspace/apps/zauth-ui/node_modules
+    ports:
+      - "3001:3001"
+    depends_on:
+      zauth-core:
+        condition: service_started
+
+  zauth-notes:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: sh -lc "npm install --workspace apps/zauth-notes && npm run dev --workspace apps/zauth-notes"
+    volumes:
+      - ..:/workspace
+      - zauth_notes_node_modules:/workspace/node_modules
+      - zauth_notes_app_node_modules:/workspace/apps/zauth-notes/node_modules
+    ports:
+      - "3002:3002"
+      - "5173:5173"
+    depends_on:
+      zauth-core:
+        condition: service_started
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  webhook-mock:
+    image: mendhak/http-https-echo:35
+    ports:
+      - "8080:8080"
+
+volumes:
+  zauth_core_node_modules:
+  zauth_core_app_node_modules:
+  zauth_ui_node_modules:
+  zauth_ui_app_node_modules:
+  zauth_notes_node_modules:
+  zauth_notes_app_node_modules:
