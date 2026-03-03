@@ -1,0 +1,33 @@
+name: deploy-demo
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: []
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            git fetch --all
+            git checkout ${{ github.sha }}
+            printf "%s" "${{ secrets.DEMO_ENV_FILE }}" > env/.env.demo
+            export COMPOSE_PROJECT_NAME=zauth_demo
+            docker compose -f docker/compose.base.yml -f docker/compose.prod.yml --env-file env/.env.demo up -d --build --remove-orphans
+            docker image prune -f
+            ./scripts/smoke.sh

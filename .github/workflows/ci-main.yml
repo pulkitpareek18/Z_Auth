@@ -1,0 +1,67 @@
+name: ci-main
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: ZK artifact check
+        run: npm run zk:check --workspace apps/zauth-core
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build Docker images
+        run: |
+          docker build -f apps/zauth-core/Dockerfile -t zauth-core:main .
+          docker build -f apps/zauth-ui/Dockerfile -t zauth-ui:main .
+          docker build -f apps/zauth-notes/Dockerfile -t zauth-notes:main .
+
+      - name: Container scan – zauth-core (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: zauth-core:main
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      - name: Container scan – zauth-ui (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: zauth-ui:main
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      - name: Container scan – zauth-notes (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: zauth-notes:main
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      - name: Compose integration tests
+        run: |
+          cp env/.env.test.example env/.env.test
+          docker compose -p zauth_ci_test -f docker/compose.base.yml -f docker/compose.test.yml --env-file env/.env.test up --build --abort-on-container-exit --exit-code-from zauth-core-test
+          docker compose -p zauth_ci_test -f docker/compose.base.yml -f docker/compose.test.yml --env-file env/.env.test down -v
