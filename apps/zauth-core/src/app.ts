@@ -19,7 +19,21 @@ export function createApp(): express.Express {
 
   app.use(
     helmet({
-      contentSecurityPolicy: false
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
+          mediaSrc: ["'self'", "blob:"],
+          workerSrc: ["'self'", "blob:"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"]
+        }
+      }
     })
   );
 

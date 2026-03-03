@@ -43,7 +43,8 @@ const schema = z.object({
   ANCHOR_PRIVATE_KEY: z.string().optional(),
   ANCHOR_IPFS_API: z.string().optional(),
   ANCHOR_PINATA_JWT: z.string().optional(),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info")
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  ADMIN_API_KEY: z.string().optional()
 });
 
 const env = schema.parse(process.env);
