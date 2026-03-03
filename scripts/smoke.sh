@@ -7,6 +7,15 @@ NOTES_URL="${NOTES_URL:-https://notes.geturstyle.shop}"
 STATUS_URL="${STATUS_URL:-https://status.geturstyle.shop/status-json}"
 AUTH_API_BASE="${AUTH_API_BASE:-https://auth.geturstyle.shop}"
 
+# Wait for Caddy/TLS to be ready (up to 30s)
+for i in $(seq 1 15); do
+  if curl -fsS --max-time 3 "$AUTH_URL" > /dev/null 2>&1; then
+    break
+  fi
+  echo "Waiting for services to be ready... (attempt $i/15)"
+  sleep 2
+done
+
 curl -fsS "$AUTH_URL" > /dev/null
 curl -fsS "$DEMO_URL" > /dev/null
 curl -fsS "$NOTES_URL" > /dev/null
