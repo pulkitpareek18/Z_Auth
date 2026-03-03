@@ -64,8 +64,35 @@ function page(title: string, body: string): string {
   --ink: #12222b;
   --muted: #50616a;
   --brand: #015f8b;
+  --brand-hover: #014a6d;
   --brand-2: #006f52;
+  --brand-2-hover: #005a42;
   --border: #d6e4eb;
+  --input-bg: #ffffff;
+  --code-bg: #0c1520;
+  --code-text: #cfe8d9;
+  --btn-text: #ffffff;
+  --danger: #c5221f;
+  --success: #137333;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: linear-gradient(160deg, #0d1520 0%, #121418 42%, #0f1614 100%);
+    --panel: #1a1e24;
+    --ink: #e0e4e8;
+    --muted: #8a949c;
+    --brand: #5ba3d0;
+    --brand-hover: #7bb8de;
+    --brand-2: #4db88a;
+    --brand-2-hover: #6dc9a0;
+    --border: #2a3540;
+    --input-bg: #1e2228;
+    --code-bg: #0a1018;
+    --code-text: #a8d4be;
+    --btn-text: #ffffff;
+    --danger: #f28b82;
+    --success: #81c995;
+  }
 }
 * { box-sizing: border-box; }
 body {
@@ -73,7 +100,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Satoshi", "Avenir Next", "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 main {
   max-width: 980px;
@@ -84,41 +111,66 @@ main {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 1rem 1.1rem;
+  padding: 1.25rem 1.25rem;
   box-shadow: 0 8px 26px rgba(17, 36, 49, 0.08);
 }
 h1 { margin: 0 0 0.75rem; font-size: 1.6rem; }
-h2 { margin: 0 0 0.7rem; font-size: 1.1rem; }
-p { color: var(--muted); }
+h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+p { color: var(--muted); margin: 0.5rem 0; }
 a.button, button {
   display: inline-block;
   border: 0;
   border-radius: 12px;
   background: var(--brand);
-  color: #fff;
+  color: var(--btn-text);
   text-decoration: none;
   padding: 0.7rem 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
+a.button:hover, button:hover { background: var(--brand-hover); }
+a.button:active, button:active { transform: scale(0.97); }
+a.button:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 button.secondary { background: var(--brand-2); }
-.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+button.secondary:hover { background: var(--brand-2-hover); }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem; }
 input, textarea {
   width: 100%;
   border-radius: 10px;
-  border: 1px solid #c4d5df;
+  border: 1px solid var(--border);
   padding: 0.65rem;
   margin-bottom: 0.6rem;
   font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--input-bg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
 pre {
-  background: #0c1520;
-  color: #cfe8d9;
+  background: var(--code-bg);
+  color: var(--code-text);
   border-radius: 12px;
   padding: 0.8rem;
   overflow: auto;
+  font-size: 0.85rem;
 }
 small { color: var(--muted); }
+code { background: var(--border); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
+@media (max-width: 640px) {
+  main { padding: 0.75rem; margin: 1rem auto; }
+  .card { padding: 1rem; border-radius: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  h1 { font-size: 1.35rem; }
+}
 </style>
 </head>
 <body>
@@ -306,13 +358,17 @@ app.get("/", (req, res) => {
             <h1>Admin Console</h1>
             <p>Create OAuth clients and policies, then inspect audit logs.</p>
             <h2>Create OAuth Client</h2>
+            <label for="client_id">Client ID</label>
             <input id="client_id" placeholder="my-app-client" />
+            <label for="redirect_uris">Redirect URIs (one per line)</label>
             <textarea id="redirect_uris" rows="3" placeholder="https://myapp.com/callback\nhttp://localhost:3000/callback"></textarea>
-            <button id="create_client">Create Client</button>
+            <button type="button" id="create_client">Create Client</button>
             <h2>Create Policy</h2>
+            <label for="policy_name">Policy Name</label>
             <input id="policy_name" placeholder="default-risk-policy" />
+            <label for="policy_config">Policy Config (JSON)</label>
             <textarea id="policy_config" rows="5" placeholder='{"mfa_required":false,"max_failed_attempts":5}'></textarea>
-            <button class="secondary" id="create_policy">Create Policy</button>
+            <button type="button" class="secondary" id="create_policy">Create Policy</button>
           </div>
           <div class="card">
             <h2>Audit Events</h2>

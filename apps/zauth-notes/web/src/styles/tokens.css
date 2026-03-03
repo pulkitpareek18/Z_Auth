@@ -19,6 +19,7 @@
   --color-brand-hover: #0b57d0;
   --color-brand-soft: #d3e3fd;
   --color-brand-line: #b6cdfb;
+  --color-brand-text: #ffffff;
   --color-success: #137333;
   --color-success-soft: #e6f4ea;
   --color-danger: #c5221f;
@@ -60,6 +61,7 @@
     --color-brand-hover: #a8c7fa;
     --color-brand-soft: #24344f;
     --color-brand-line: #47638f;
+    --color-brand-text: #0d1117;
     --color-success: #81c995;
     --color-success-soft: #173a28;
     --color-danger: #f28b82;

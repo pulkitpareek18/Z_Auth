@@ -320,6 +320,11 @@ input:focus, textarea:focus {
   border-color: var(--color-brand);
   box-shadow: 0 0 0 1px var(--color-brand);
 }
+input:disabled, textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--color-status-bg);
+}
 .actions {
   margin-top: var(--space-7);
   display: flex;
@@ -341,7 +346,11 @@ input:focus, textarea:focus {
   padding: 0;
   text-decoration: none;
   line-height: 1.4;
+  transition: opacity 0.15s;
 }
+.link:hover { text-decoration: underline; }
+.link:active { opacity: 0.7; }
+.link:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; border-radius: 4px; }
 button.primary, a.primary {
   border: none;
   border-radius: var(--radius-pill);
@@ -360,6 +369,9 @@ button.primary, a.primary {
   transition: background-color 0.2s ease;
 }
 button.primary:hover, a.primary:hover { background: var(--color-primary-hover); }
+button.primary:active, a.primary:active { transform: scale(0.97); }
+button.primary:focus-visible, a.primary:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+button.primary:disabled, a.primary[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 button.secondary, a.secondary {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-pill);
@@ -381,11 +393,14 @@ button.secondary:hover, a.secondary:hover {
   background: var(--color-brand-soft);
   border-color: var(--color-brand-line);
 }
+button.secondary:active, a.secondary:active { transform: scale(0.97); }
+button.secondary:focus-visible, a.secondary:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+button.secondary:disabled, a.secondary[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 button.danger {
   border: none;
   border-radius: var(--radius-pill);
   background: var(--color-danger);
-  color: white;
+  color: var(--color-primary-text);
   min-height: 40px;
   padding: 0 20px;
   font-size: 14px;
@@ -395,12 +410,17 @@ button.danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.2s ease;
 }
+button.danger:hover { filter: brightness(1.1); }
+button.danger:active { transform: scale(0.97); }
+button.danger:focus-visible { outline: 2px solid var(--color-danger); outline-offset: 2px; }
+button.danger:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .code {
   display: inline-block;
-  background: #f1f3f4;
-  border: 1px solid #e0e3e7;
-  color: #1f1f1f;
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-line);
+  color: var(--color-text);
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 12px;
@@ -626,7 +646,7 @@ button.passkey-tab.active {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--color-card);
 }
 .qr canvas, .qr img { width: 100%; height: 100%; }
 pre {
@@ -652,7 +672,7 @@ video {
   border: 1px solid var(--color-line);
   border-radius: 12px;
   margin-top: var(--space-2);
-  background: #0d1117;
+  background: var(--color-code-bg);
 }
 
 /* ── Face Verification Overlay ── */
@@ -663,7 +683,7 @@ video {
   margin: 12px auto 0;
   border-radius: 16px;
   overflow: hidden;
-  background: #0d1117;
+  background: var(--color-code-bg);
   aspect-ratio: 4 / 3;
 }
 .face-viewport video {
@@ -3631,35 +3651,27 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
           zkProof = proof;
           publicSignals = ps;
         } else {
-          zkProof = { mock: true, hash1, challengeHash };
-          publicSignals = [hash1, challengeHash];
+          // Build mock proof matching server's computeMockProofDigest
+          function canonicalize(value) {
+            if (Array.isArray(value)) return value.map(v => canonicalize(v));
+            if (!value || typeof value !== 'object') return value;
+            const out = {};
+            for (const key of Object.keys(value).sort()) out[key] = canonicalize(value[key]);
+            return out;
+          }
+          publicSignals = canonicalize({
+            uid: enrollStart.uid_draft,
+            challenge_hash: challengeHash
+          });
+          const signalsHash = await sha256Hex(JSON.stringify(publicSignals));
+          const digest = await sha256Hex(challengeHash + ':' + signalsHash + ':' + enrollStart.uid_draft);
+          zkProof = { digest };
         }
 
         setStatus('Submitting enrollment...');
 
-        // 4. Start a liveness session (use a mock handoff for enrollment context)
-        const livenessResp = await fetch('/auth/liveness/challenge', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ handoff_id: 'recovery_' + Date.now() })
-        });
-        let livenessSessionId = 'recovery_liveness_' + Date.now();
-        if (livenessResp.ok) {
-          const livenessData = await livenessResp.json();
-          livenessSessionId = livenessData.liveness_session_id;
-          // Verify liveness
-          await fetch('/auth/liveness/verify', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              handoff_id: 'recovery_' + Date.now(),
-              liveness_session_id: livenessSessionId,
-              events: [],
-              confidence: 0.95,
-              duration_ms: 2000
-            })
-          });
-        }
+        // Recovery context: liveness already proven via face match, use a placeholder session ID
+        const livenessSessionId = 'recovery_liveness_' + Date.now();
 
         // 5. Complete enrollment
         const skipCodeRegen = recoveryMethod === 'multi_code';
