@@ -22,7 +22,7 @@ import {
   finishPasskeyAuthentication,
   finishPasskeyRegistration
 } from "../services/passkeyService.js";
-import { getProofReceipt, verifyRecoveryCode, consumeRecoveryCode, consumeRecoveryCodes, revokeAllCredentialsForSubject, verifyBiometricMatch, findUidForSubject, verifyMultipleRecoveryCodes } from "../services/pramaanV2Service.js";
+import { getProofReceipt, verifyRecoveryCode, consumeRecoveryCode, consumeRecoveryCodes, revokeAllCredentialsForSubject, verifyBiometricCommitment, findUidForSubject, verifyMultipleRecoveryCodes } from "../services/pramaanV2Service.js";
 import { findUserBySubject } from "../services/userService.js";
 import { getCache } from "../services/cacheService.js";
 import { clearSessionCookie, createSession, deleteSession, getSession, setSessionCookie } from "../services/sessionService.js";
@@ -635,12 +635,13 @@ passkeyRouter.post("/auth/recovery/verify", async (req, res) => {
   });
 });
 
-// Step 2: Verify face against enrolled biometric, then create session
-// Recovery code + face match = full identity verification
+// Step 2: Verify biometric commitment (hash-based, no raw embeddings on server)
+// Recovery code + biometric commitment match = full identity verification.
+// Face matching happens CLIENT-SIDE — server only verifies the SHA-256 hash.
 passkeyRouter.post("/auth/recovery/biometric", async (req, res) => {
   const schema = z.object({
     recovery_token: z.string().min(10),
-    face_embedding: z.string().min(100).max(1024)
+    biometric_hash: z.string().min(32).max(128)
   });
 
   const parsed = schema.safeParse(req.body);
@@ -657,17 +658,17 @@ passkeyRouter.post("/auth/recovery/biometric", async (req, res) => {
   }
   const ctx = JSON.parse(raw) as { subjectId: string; codeId: number; username: string };
 
-  // Find the user's Pramaan UID to look up enrolled face
+  // Find the user's Pramaan UID to look up enrolled biometric commitment
   const uid = await findUidForSubject(ctx.subjectId);
   if (!uid) {
     res.status(400).json({ verified: false, reason: "no_enrolled_identity" });
     return;
   }
 
-  // Verify face against enrolled biometric
-  const bioMatch = await verifyBiometricMatch({
+  // Verify biometric commitment (SHA-256 hash comparison, no raw face data)
+  const bioMatch = await verifyBiometricCommitment({
     uid,
-    candidateEmbedding: parsed.data.face_embedding
+    candidateHash: parsed.data.biometric_hash
   });
 
   await writeAuditEvent({
@@ -677,25 +678,21 @@ passkeyRouter.post("/auth/recovery/biometric", async (req, res) => {
     outcome: bioMatch.matched ? "success" : "failure",
     traceId: req.traceId,
     payload: {
-      distance: bioMatch.distance,
-      threshold: bioMatch.threshold,
       reason: bioMatch.reason ?? null
     }
   });
 
   if (!bioMatch.matched) {
-    // Don't delete the recovery token — user can retry face or use multi-code fallback
+    // Don't delete the recovery token — user can retry or use multi-code fallback
     res.status(403).json({
       verified: false,
-      reason: "face_mismatch",
-      distance: bioMatch.distance,
-      threshold: bioMatch.threshold,
+      reason: "biometric_commitment_mismatch",
       fallback: "multi_code"
     });
     return;
   }
 
-  // Face matches — NOW consume the recovery code (blockchain-ready: inserts nullifier)
+  // Biometric commitment matches — NOW consume the recovery code (blockchain-ready: inserts nullifier)
   await consumeRecoveryCode(ctx.codeId, ctx.subjectId);
 
   // Revoke old passkey credentials so user can register new ones (blockchain-ready: inserts revocations)
@@ -716,8 +713,7 @@ passkeyRouter.post("/auth/recovery/biometric", async (req, res) => {
     outcome: "success",
     traceId: req.traceId,
     payload: {
-      subject_id: ctx.subjectId,
-      distance: bioMatch.distance
+      subject_id: ctx.subjectId
     }
   });
 

@@ -2116,17 +2116,17 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
     const uint8ToBase64 = ZAuthFace.uint8ToBase64;
     const float32ToBase64 = ZAuthFace.float32ToBase64;
 
-    async function verifyBiometricMatch(uid, embeddingBase64) {
+    async function verifyBiometricCommitment(uid, biometricHash) {
       const resp = await fetch('/pramaan/v2/biometric/verify', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ uid, face_embedding: embeddingBase64 })
+        body: JSON.stringify({ uid, biometric_hash: biometricHash })
       });
       const data = await resp.json();
       if (!resp.ok || !data.matched) {
-        throw new Error(data.reason || 'Biometric verification failed: face does not match enrolled identity');
+        throw new Error(data.reason || 'Biometric commitment verification failed');
       }
-      log('Biometric match confirmed, distance: ' + (data.distance || 'N/A'));
+      log('Biometric commitment verified');
     }
 
     function canonicalize(value) {
@@ -2343,8 +2343,8 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           public_signals: payload.publicSignals,
           handoff_id: handoffId
       };
-      if (lastFaceEmbedding && lastFaceEmbedding.base64) {
-        submitBody.face_embedding = lastFaceEmbedding.base64;
+      if (lastFaceEmbedding && lastFaceEmbedding.hash) {
+        submitBody.biometric_hash = lastFaceEmbedding.hash;
       }
       const submitResp = await fetch('/pramaan/v2/proof/submit', {
         method: 'POST',
@@ -2365,10 +2365,10 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       }
       const draft = enrollmentDraft;
       let hash1;
-      let faceEmbeddingPayload = null;
+      let biometricHashPayload = null;
       if (lastFaceEmbedding && lastFaceEmbedding.hash) {
         hash1 = lastFaceEmbedding.hash;
-        faceEmbeddingPayload = lastFaceEmbedding.base64;
+        biometricHashPayload = lastFaceEmbedding.hash;
         log('Using biometric hash as hash1: ' + hash1.substring(0, 16) + '...');
       } else {
         hash1 = await sha256Hex('enroll:' + username + ':' + draft.enrollment_id);
@@ -2395,8 +2395,8 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         hash2,
         commitment_root: commitmentRoot
       };
-      if (faceEmbeddingPayload) {
-        enrollBody.face_embedding = faceEmbeddingPayload;
+      if (biometricHashPayload) {
+        enrollBody.biometric_hash = biometricHashPayload;
       }
       const resp = await fetch('/pramaan/v2/enrollment/complete', {
         method: 'POST',
@@ -3322,11 +3322,11 @@ uiRouter.get("/ui/recovery", (req, res) => {
 
         // Face detected — verify with server
         setScanStatus('Verifying identity...');
-        const embeddingBase64 = ZAuthFace.float32ToBase64(descriptor);
+        const biometricHash = await ZAuthFace.computeBiometricHash(descriptor);
         const resp = await fetch('/auth/recovery/biometric', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ recovery_token: recoveryToken, face_embedding: embeddingBase64 })
+          body: JSON.stringify({ recovery_token: recoveryToken, biometric_hash: biometricHash })
         });
         const data = await resp.json();
 
@@ -3607,7 +3607,7 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
         const video = document.getElementById('face-video');
         const descriptor = await ZAuthFace.extractFaceEmbedding(video);
         const quantized = ZAuthFace.quantizeEmbedding(descriptor);
-        const faceEmbeddingBase64 = ZAuthFace.float32ToBase64(descriptor);
+        const biometricHash = await ZAuthFace.computeBiometricHash(descriptor);
 
         viewport.classList.remove('scanning');
         viewport.classList.add('completing');
@@ -3684,7 +3684,7 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
           hash1,
           hash2,
           commitment_root: commitmentRoot,
-          face_embedding: faceEmbeddingBase64
+          biometric_hash: biometricHash
         };
         if (skipCodeRegen) enrollBody.skip_recovery_code_regen = true;
         const completeResp = await fetch('/pramaan/v2/enrollment/complete', {

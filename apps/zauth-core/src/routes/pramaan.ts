@@ -11,7 +11,7 @@ import {
   getProofReceipt,
   startEnrollment,
   submitProof,
-  verifyBiometricMatch
+  verifyBiometricCommitment
 } from "../services/pramaanV2Service.js";
 
 export const pramaanRouter = Router();
@@ -189,7 +189,7 @@ pramaanRouter.post("/pramaan/v2/enrollment/complete", requireSession, async (req
     hash1: z.string().min(16),
     hash2: z.string().min(16),
     commitment_root: z.string().min(16),
-    face_embedding: z.string().min(100).max(1024).optional(),
+    biometric_hash: z.string().min(32).max(128).optional(),
     skip_recovery_code_regen: z.boolean().optional()
   });
   const parsed = schema.safeParse(req.body ?? {});
@@ -211,7 +211,7 @@ pramaanRouter.post("/pramaan/v2/enrollment/complete", requireSession, async (req
       hash1: parsed.data.hash1,
       hash2: parsed.data.hash2,
       commitmentRoot: parsed.data.commitment_root,
-      faceEmbedding: parsed.data.face_embedding,
+      biometricHash: parsed.data.biometric_hash,
       skipRecoveryCodeRegen: parsed.data.skip_recovery_code_regen
     });
 
@@ -301,7 +301,7 @@ pramaanRouter.post("/pramaan/v2/proof/submit", async (req, res) => {
     zk_proof: z.unknown(),
     public_signals: z.unknown(),
     handoff_id: z.string().optional(),
-    face_embedding: z.string().min(100).max(1024).optional()
+    biometric_hash: z.string().min(32).max(128).optional()
   });
   const parsed = schema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -316,7 +316,7 @@ pramaanRouter.post("/pramaan/v2/proof/submit", async (req, res) => {
       zkProof: parsed.data.zk_proof,
       publicSignals: parsed.data.public_signals,
       handoffId: parsed.data.handoff_id,
-      faceEmbedding: parsed.data.face_embedding
+      biometricHash: parsed.data.biometric_hash
     });
 
     await writeAuditEvent({
@@ -385,6 +385,8 @@ pramaanRouter.get("/pramaan/v2/identity/me", requireSession, async (_req, res) =
   res.status(200).json(identity);
 });
 
+// Privacy-by-design: biometric verification uses hash commitment, not raw embeddings.
+// Face matching (Euclidean distance) happens CLIENT-SIDE. Server only verifies the hash.
 pramaanRouter.post("/pramaan/v2/biometric/verify", requireSession, async (req, res) => {
   if (!ensureV2Enabled(res)) {
     return;
@@ -392,7 +394,7 @@ pramaanRouter.post("/pramaan/v2/biometric/verify", requireSession, async (req, r
 
   const schema = z.object({
     uid: z.string().min(3),
-    face_embedding: z.string().min(100).max(1024)
+    biometric_hash: z.string().min(32).max(128)
   });
   const parsed = schema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -403,9 +405,9 @@ pramaanRouter.post("/pramaan/v2/biometric/verify", requireSession, async (req, r
   const session = res.locals.session as { subjectId: string; username: string };
 
   try {
-    const result = await verifyBiometricMatch({
+    const result = await verifyBiometricCommitment({
       uid: parsed.data.uid,
-      candidateEmbedding: parsed.data.face_embedding
+      candidateHash: parsed.data.biometric_hash
     });
 
     await writeAuditEvent({
@@ -416,16 +418,12 @@ pramaanRouter.post("/pramaan/v2/biometric/verify", requireSession, async (req, r
       traceId: req.traceId,
       payload: {
         uid: parsed.data.uid,
-        distance: result.distance,
-        threshold: result.threshold,
         reason: result.reason ?? null
       }
     });
 
     res.status(result.matched ? 200 : 403).json({
       matched: result.matched,
-      distance: result.distance,
-      threshold: result.threshold,
       reason: result.reason
     });
   } catch (error) {

@@ -157,6 +157,22 @@
     }, 700);
   }
 
+  /* ── Privacy-preserving biometric commitment ───── */
+
+  /**
+   * Compute an irreversible biometric commitment from a face descriptor.
+   * This is the ONLY representation sent to the server — raw embeddings
+   * NEVER leave the device. The commitment is SHA-256(quantized_embedding),
+   * which cannot be reversed to reconstruct facial features.
+   *
+   * @param {Float32Array} descriptor - 128-dim face descriptor from face-api.js
+   * @returns {Promise<string>} 64-char hex SHA-256 hash
+   */
+  function computeBiometricHash(descriptor) {
+    var quantized = quantizeEmbedding(descriptor);
+    return hashEmbedding(quantized);
+  }
+
   /* ── Public API ─────────────────────────────────── */
 
   window.ZAuthFace = {
@@ -164,6 +180,7 @@
     quantizeEmbedding: quantizeEmbedding,
     uint8ToBase64: uint8ToBase64,
     hashEmbedding: hashEmbedding,
+    computeBiometricHash: computeBiometricHash,
     sha256Hex: sha256Hex,
     loadFaceApiModels: loadFaceApiModels,
     extractFaceEmbedding: extractFaceEmbedding,
