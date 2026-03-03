@@ -382,34 +382,57 @@ app.get("/", (req, res) => {
           const parseLines = (value) => value.split('\n').map((line) => line.trim()).filter(Boolean);
 
           document.getElementById('create_client').onclick = async () => {
-            const payload = {
-              client_id: document.getElementById('client_id').value.trim(),
-              redirect_uris: parseLines(document.getElementById('redirect_uris').value),
-              scopes: ['openid', 'profile', 'zauth.identity'],
-              grant_types: ['authorization_code']
-            };
-            const resp = await fetch(apiBase + '/admin/v1/clients', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
-            alert(resp.ok ? 'Client created' : 'Error: ' + JSON.stringify(data));
+            const btn = document.getElementById('create_client');
+            btn.disabled = true;
+            try {
+              const payload = {
+                client_id: document.getElementById('client_id').value.trim(),
+                redirect_uris: parseLines(document.getElementById('redirect_uris').value),
+                scopes: ['openid', 'profile', 'zauth.identity'],
+                grant_types: ['authorization_code']
+              };
+              const resp = await fetch(apiBase + '/admin/v1/clients', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const data = await resp.json();
+              alert(resp.ok ? 'Client created successfully' : 'Error: ' + (data.message || data.error || 'Unknown error'));
+            } catch (err) {
+              alert('Network error: ' + err.message);
+            } finally {
+              btn.disabled = false;
+            }
           };
 
           document.getElementById('create_policy').onclick = async () => {
-            const payload = {
-              tenant_id: 'default',
-              name: document.getElementById('policy_name').value.trim(),
-              config: JSON.parse(document.getElementById('policy_config').value || '{}')
-            };
-            const resp = await fetch(apiBase + '/admin/v1/policies', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
-            alert(resp.ok ? 'Policy created' : 'Error: ' + JSON.stringify(data));
+            const btn = document.getElementById('create_policy');
+            btn.disabled = true;
+            try {
+              let configObj;
+              try {
+                configObj = JSON.parse(document.getElementById('policy_config').value || '{}');
+              } catch (parseErr) {
+                alert('Invalid JSON in policy config: ' + parseErr.message);
+                return;
+              }
+              const payload = {
+                tenant_id: 'default',
+                name: document.getElementById('policy_name').value.trim(),
+                config: configObj
+              };
+              const resp = await fetch(apiBase + '/admin/v1/policies', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const data = await resp.json();
+              alert(resp.ok ? 'Policy created successfully' : 'Error: ' + (data.message || data.error || 'Unknown error'));
+            } catch (err) {
+              alert('Network error: ' + err.message);
+            } finally {
+              btn.disabled = false;
+            }
           };
 
           document.getElementById('load_audit').onclick = async () => {

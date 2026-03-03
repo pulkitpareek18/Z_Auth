@@ -2249,7 +2249,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         throw new Error('This browser does not support passkeys.');
       }
       if (!window.isSecureContext) {
-        throw new Error('Passkeys require HTTPS. Open verify.geturstyle.shop on your phone.');
+        throw new Error('Passkeys require HTTPS. Open ' + window.location.hostname + ' on your phone using HTTPS.');
       }
     }
 
