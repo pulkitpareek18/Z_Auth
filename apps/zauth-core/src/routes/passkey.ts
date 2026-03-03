@@ -25,9 +25,14 @@ import {
 import { getProofReceipt, verifyRecoveryCode, consumeRecoveryCode, consumeRecoveryCodes, revokeAllCredentialsForSubject, verifyBiometricCommitment, findUidForSubject, verifyMultipleRecoveryCodes } from "../services/pramaanV2Service.js";
 import { findUserBySubject } from "../services/userService.js";
 import { getCache } from "../services/cacheService.js";
+import { randomId } from "../utils/crypto.js";
 import { clearSessionCookie, createSession, deleteSession, getSession, setSessionCookie } from "../services/sessionService.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 export const passkeyRouter = Router();
+
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+const recoveryLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 const usernameSchema = z.string().min(3).max(128);
 
@@ -130,7 +135,7 @@ passkeyRouter.post("/auth/webauthn/login/options", async (req, res) => {
 // which upgrades to aal2:zk via face verification and zero-knowledge proof.
 // Downstream apps (e.g. Z Notes) can enforce NOTES_REQUIRED_ACR=urn:zauth:aal2:zk
 // to require the full biometric+ZK flow.
-passkeyRouter.post("/auth/webauthn/login/verify", async (req, res) => {
+passkeyRouter.post("/auth/webauthn/login/verify", authLimiter, async (req, res) => {
   const bodySchema = z.object({
     username: usernameSchema,
     response: z.unknown(),
@@ -307,7 +312,7 @@ passkeyRouter.post("/auth/liveness/challenge", async (req, res) => {
   });
 });
 
-passkeyRouter.post("/auth/liveness/verify", async (req, res) => {
+passkeyRouter.post("/auth/liveness/verify", authLimiter, async (req, res) => {
   const schema = z.object({
     handoff_id: z.string().min(6),
     liveness_session_id: z.string().min(6),
@@ -439,6 +444,7 @@ passkeyRouter.post("/auth/handoff/approve", async (req, res) => {
   };
   assurance = {
     ...assurance,
+    acr: "urn:zauth:aal2",
     amr: Array.from(new Set([...(assurance.amr ?? ["passkey"]), "face"]))
   };
 
@@ -448,11 +454,11 @@ passkeyRouter.post("/auth/handoff/approve", async (req, res) => {
       res.status(400).json({ error: "invalid_proof_verification_id" });
       return;
     }
-    if (receipt.subject_id && receipt.subject_id !== session.subjectId) {
+    if (receipt.subject_id !== session.subjectId) {
       res.status(400).json({ error: "proof_subject_mismatch" });
       return;
     }
-    if (receipt.handoff_id && receipt.handoff_id !== pendingHandoff.handoffId) {
+    if (receipt.handoff_id !== pendingHandoff.handoffId) {
       res.status(400).json({ error: "proof_handoff_mismatch" });
       return;
     }
@@ -587,7 +593,7 @@ passkeyRouter.get("/auth/handoff/status", async (req, res) => {
 // ── Recovery Flow ──────────────────────────────────────────────────
 // Step 1: Validate recovery code (does NOT consume it yet)
 // Returns a recovery_token to use in step 2
-passkeyRouter.post("/auth/recovery/verify", async (req, res) => {
+passkeyRouter.post("/auth/recovery/verify", recoveryLimiter, async (req, res) => {
   const schema = z.object({
     username: usernameSchema,
     recovery_code: z.string().min(4).max(20)
@@ -621,7 +627,7 @@ passkeyRouter.post("/auth/recovery/verify", async (req, res) => {
   }
 
   // Store recovery context in cache (10 min TTL) — requires biometric step to complete
-  const recoveryToken = `recovery_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const recoveryToken = `recovery_${randomId(24)}`;
   await getCache().set(
     `recovery:${recoveryToken}`,
     JSON.stringify({ subjectId: result.subjectId, codeId: result.codeId, username: parsed.data.username }),
@@ -736,7 +742,7 @@ passkeyRouter.get("/auth/recovery/method", async (req, res) => {
 
 // Step 2b (fallback): If face doesn't match, verify with 3 recovery codes instead
 // This handles cases where appearance changed (weight, aging, surgery, etc.)
-passkeyRouter.post("/auth/recovery/multi-code", async (req, res) => {
+passkeyRouter.post("/auth/recovery/multi-code", recoveryLimiter, async (req, res) => {
   const schema = z.object({
     recovery_token: z.string().min(10),
     recovery_codes: z.array(z.string().min(4).max(20)).min(3).max(8)
