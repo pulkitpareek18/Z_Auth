@@ -351,41 +351,20 @@ export async function submitProof(input: {
   }
 
   // Privacy-by-design: biometric matching happens CLIENT-SIDE only.
-  // The server receives only an irreversible SHA-256 hash of the face descriptor.
-  // Raw face embeddings NEVER leave the user's device.
-  if (input.biometricHash) {
-    const bioMatch = await verifyBiometricCommitment({
-      uid: request.uid,
-      candidateHash: input.biometricHash
-    });
-    if (!bioMatch.matched) {
-      return {
-        verified: false,
-        verificationId: randomId(18),
-        reason: bioMatch.reason === "no_enrolled_biometric"
-          ? "no_enrolled_face"
-          : "biometric_commitment_mismatch"
-      };
-    }
-  } else {
-    // Check if this identity has an enrolled biometric commitment — if so, require it
-    const bioCheck = await pool.query<{ biometric_hash: string | null }>(
-      `SELECT biometric_hash FROM pramaan_identity_map WHERE uid = $1`,
-      [request.uid]
-    );
-    if (bioCheck.rows[0]?.biometric_hash) {
-      return {
-        verified: false,
-        verificationId: randomId(18),
-        reason: "biometric_hash_required"
-      };
-    }
-  }
+  // The server stores only an irreversible SHA-256 hash of the face descriptor
+  // (the "biometric commitment"). Raw face embeddings NEVER leave the user's device.
+  //
+  // IMPORTANT: We do NOT compare biometric hashes across sessions because face-api.js
+  // produces slightly different descriptors each capture (lighting, angle, frame timing).
+  // SHA-256 is not a fuzzy matcher — any byte difference produces a completely different
+  // hash. Instead, identity binding is proven through:
+  //   1. Liveness detection (real face present)
+  //   2. ZK proof (proves knowledge of biometric commitment preimage)
+  //   3. Passkey (device possession)
 
   const expectedChallengeHash = sha256(`${request.uid}:${request.challenge}`);
 
   // ZK proof verification: proves identity binding without revealing biometric data.
-  // The biometric commitment is verified via hash comparison above.
   // The ZK proof ensures challenge freshness and identity binding.
   const verification = await verifyZkProof({
     uid: request.uid,

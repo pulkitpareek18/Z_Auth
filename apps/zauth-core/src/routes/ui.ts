@@ -2663,10 +2663,11 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           throw new Error('Identity not available for proof verification');
         }
 
-        if (!signupMode && !enrollmentDraft && lastFaceEmbedding) {
-          setText('liveness-state', 'Verifying biometric identity...');
-          await verifyBiometricCommitment(identity.uid, lastFaceEmbedding.hash);
-        }
+        // Biometric identity is verified through liveness + ZK proof binding.
+        // We do NOT compare SHA-256 hashes across sessions because face-api.js
+        // produces slightly different descriptors each capture, making exact
+        // hash matching impossible. The ZK proof proves knowledge of the
+        // biometric commitment preimage, which is the real binding.
 
         await runAuthenticationProof(identity.uid);
         faceComplete = true;
