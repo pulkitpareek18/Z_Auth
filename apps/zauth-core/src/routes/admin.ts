@@ -1,10 +1,30 @@
-import { Router } from "express";
+import crypto from "node:crypto";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { listAuditEvents, writeAuditEvent } from "../services/auditService.js";
 import { createClient } from "../services/oauthService.js";
+import { logger } from "../utils/logger.js";
 
 export const adminRouter = Router();
+
+// Admin API key guard — blocks all admin routes unless a valid key is provided.
+// Set ADMIN_API_KEY env var in production. If unset, admin routes are disabled entirely.
+adminRouter.use("/admin/v1", (req: Request, res: Response, next: NextFunction) => {
+  const configuredKey = process.env.ADMIN_API_KEY;
+  if (!configuredKey) {
+    res.status(403).json({ error: "admin_disabled", message: "Admin API is not configured" });
+    return;
+  }
+  const providedKey = req.header("x-admin-api-key") ?? "";
+  const expected = Buffer.from(configuredKey);
+  const received = Buffer.from(providedKey);
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  next();
+});
 
 adminRouter.post("/admin/v1/clients", async (req, res) => {
   const schema = z.object({
@@ -41,7 +61,8 @@ adminRouter.post("/admin/v1/clients", async (req, res) => {
 
     res.status(201).json(created);
   } catch (error) {
-    res.status(409).json({ error: "client_conflict", message: (error as Error).message });
+    logger.error("Failed to create client", { error: (error as Error).message });
+    res.status(409).json({ error: "client_conflict", message: "Client already exists or conflicts with an existing registration" });
   }
 });
 

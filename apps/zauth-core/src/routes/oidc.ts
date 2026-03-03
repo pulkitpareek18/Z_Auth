@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { config } from "../config.js";
 import { getAuthRequest, createAuthRequest, deleteAuthRequest } from "../services/authRequestService.js";
@@ -30,7 +31,7 @@ oidcRouter.get("/.well-known/openid-configuration", (_req, res) => {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"],
-    code_challenge_methods_supported: ["S256", "plain"],
+    code_challenge_methods_supported: ["S256"],
     scopes_supported: ["openid", "profile", "email", "zauth.identity"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
@@ -294,9 +295,13 @@ oidcRouter.post("/oauth2/token", async (req, res) => {
     return;
   }
 
-  if (client.client_secret && client.client_secret !== clientSecret) {
-    res.status(401).json({ error: "invalid_client" });
-    return;
+  if (client.client_secret) {
+    const expected = Buffer.from(client.client_secret);
+    const received = Buffer.from(clientSecret || "");
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+      res.status(401).json({ error: "invalid_client" });
+      return;
+    }
   }
 
   const exchange = await exchangeAuthorizationCode({

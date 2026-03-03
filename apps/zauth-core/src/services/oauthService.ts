@@ -148,10 +148,10 @@ export async function exchangeAuthorizationCode(params: {
     if (!params.codeVerifier) {
       return { ok: false, error: "invalid_request" };
     }
-    const expected =
-      authCode.code_challenge_method === "S256"
-        ? deriveCodeChallenge(params.codeVerifier)
-        : params.codeVerifier;
+    if (authCode.code_challenge_method && authCode.code_challenge_method !== "S256") {
+      return { ok: false, error: "invalid_request" };
+    }
+    const expected = deriveCodeChallenge(params.codeVerifier);
     if (expected !== authCode.code_challenge) {
       return { ok: false, error: "invalid_grant" };
     }
