@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { pool } from "./pool.js";
+import { runMigrations } from "./migrate.js";
 
 const schemaSql = `
 CREATE TABLE IF NOT EXISTS tenants (
@@ -269,24 +270,6 @@ export async function initializeDatabase(): Promise<void> {
   try {
     await client.query("BEGIN");
     await client.query(schemaSql);
-    await client.query(`ALTER TABLE auth_codes ADD COLUMN IF NOT EXISTS acr TEXT`);
-    await client.query(`ALTER TABLE auth_codes ADD COLUMN IF NOT EXISTS amr JSONB`);
-    await client.query(`ALTER TABLE auth_codes ADD COLUMN IF NOT EXISTS uid TEXT`);
-    await client.query(`ALTER TABLE auth_codes ADD COLUMN IF NOT EXISTS did TEXT`);
-    await client.query(`ALTER TABLE auth_codes ADD COLUMN IF NOT EXISTS proof_verification_id TEXT`);
-    await client.query(`ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS acr TEXT`);
-    await client.query(`ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS amr JSONB`);
-    await client.query(`ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS uid TEXT`);
-    await client.query(`ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS did TEXT`);
-    // Privacy-by-design: biometric_hash stores SHA-256(face_descriptor), not the raw embedding.
-    // Raw face data NEVER leaves the client device. This column is an irreversible commitment.
-    await client.query(`ALTER TABLE pramaan_identity_map ADD COLUMN IF NOT EXISTS biometric_hash TEXT`);
-    await client.query(`ALTER TABLE pramaan_identity_map ADD COLUMN IF NOT EXISTS zk_commitment TEXT`);
-    // Migration: drop legacy face_embedding column if it exists (raw biometrics no longer stored)
-    await client.query(`ALTER TABLE pramaan_identity_map DROP COLUMN IF EXISTS face_embedding`);
-    await client.query(`ALTER TABLE pramaan_identity_map DROP COLUMN IF EXISTS embedding_version`);
-    await client.query(`ALTER TABLE identity_commitments ADD COLUMN IF NOT EXISTS zk_commitment TEXT`);
-    await client.query(`ALTER TABLE recovery_codes ADD COLUMN IF NOT EXISTS generation_id TEXT DEFAULT 'gen0'`);
 
     await client.query(
       `INSERT INTO tenants (id, name, status)
@@ -325,4 +308,6 @@ export async function initializeDatabase(): Promise<void> {
   } finally {
     client.release();
   }
+
+  await runMigrations();
 }
