@@ -131,7 +131,8 @@
   function showSuccessOverlay(viewportId) {
     var viewport = document.getElementById(viewportId);
     if (!viewport) return;
-    viewport.classList.add("completing");
+    viewport.classList.add("completing", "celebrating");
+    viewport.classList.remove("scanning");
     var el = viewport.querySelector(".face-success");
     if (!el) return;
     el.style.display = "none";
@@ -139,7 +140,8 @@
     el.style.display = "flex";
     setTimeout(function () {
       el.style.display = "none";
-    }, 700);
+      viewport.classList.remove("celebrating");
+    }, 800);
   }
 
   function showFailureOverlay(viewportId) {

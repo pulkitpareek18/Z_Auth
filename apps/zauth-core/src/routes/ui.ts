@@ -675,16 +675,25 @@ video {
   background: var(--color-code-bg);
 }
 
-/* ── Face Verification Overlay ── */
+/* ── Face Verification Overlay (Face ID Style) ── */
 .face-viewport {
   position: relative;
   width: 100%;
   max-width: 320px;
   margin: 12px auto 0;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  background: var(--color-code-bg);
+  background: #000;
   aspect-ratio: 4 / 3;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.face-viewport.step-bounce {
+  animation: viewport-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes viewport-bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.025); }
+  100% { transform: scale(1); }
 }
 .face-viewport video {
   position: absolute;
@@ -697,6 +706,36 @@ video {
   margin: 0;
   transform: scaleX(-1);
 }
+
+/* Scan line effect — sweeps during initial detection */
+.face-viewport::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255,255,255,0.08) 48%,
+    rgba(255,255,255,0.15) 50%,
+    rgba(255,255,255,0.08) 52%,
+    transparent 100%
+  );
+  background-size: 100% 200%;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.face-viewport.scanning::after {
+  opacity: 1;
+  animation: scan-sweep 1.8s ease-in-out 3;
+}
+@keyframes scan-sweep {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+/* Frame ring container */
 .face-frame {
   position: absolute;
   inset: 0;
@@ -709,13 +748,56 @@ video {
 .face-frame-ring {
   width: 68%;
   height: auto;
-  opacity: 0.6;
-  animation: face-ring-pulse 3s ease-in-out infinite;
+  opacity: 0.45;
+  transition: opacity 0.4s, filter 0.4s;
+  filter: drop-shadow(0 0 0px transparent);
 }
-@keyframes face-ring-pulse {
-  0%, 100% { opacity: 0.45; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.02); }
+
+/* Face detected — ring glows */
+.face-viewport.face-detected .face-frame-ring {
+  opacity: 0.85;
+  filter: drop-shadow(0 0 8px rgba(66,133,244,0.4));
 }
+
+/* Guide ring (dashed) */
+.face-frame-ring .ring-guide {
+  transition: stroke 0.4s, stroke-opacity 0.4s;
+}
+
+/* Progress arc ring — fills as steps complete */
+.face-frame-ring .ring-progress {
+  stroke: rgba(66,133,244,0.9);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s;
+  filter: drop-shadow(0 0 6px rgba(66,133,244,0.5));
+}
+
+/* State colors for progress arc */
+.face-viewport.completing .ring-progress {
+  stroke: rgba(52,199,89,0.95);
+  filter: drop-shadow(0 0 10px rgba(52,199,89,0.6));
+}
+.face-viewport.failed .ring-progress {
+  stroke: rgba(220,53,69,0.9);
+  filter: drop-shadow(0 0 8px rgba(220,53,69,0.5));
+}
+
+/* Ring glow pulse on step complete */
+.face-frame-ring .ring-glow {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.face-viewport.step-glow .ring-glow {
+  animation: ring-glow-flash 0.5s ease-out forwards;
+}
+@keyframes ring-glow-flash {
+  0%   { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Action cue container */
 .face-cue {
   position: absolute;
   top: 8%;
@@ -732,26 +814,36 @@ video {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  animation: cue-enter 0.4s ease-out;
+  animation: cue-bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cue-icon.cue-exit {
+  animation: cue-fade-out 0.25s ease-in forwards;
 }
 .cue-icon svg {
   width: 56px;
   height: auto;
-  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
 }
 .cue-label {
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.65);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
-@keyframes cue-enter {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes cue-bounce-in {
+  0%   { opacity: 0; transform: scale(0.6) translateY(-8px); }
+  60%  { opacity: 1; transform: scale(1.05) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
+@keyframes cue-fade-out {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+/* Cue-specific animations */
 .cue-blink svg { width: 64px; }
 .cue-blink .eye-shape {
   animation: blink-close 1.6s ease-in-out infinite;
@@ -784,102 +876,109 @@ video {
   0%, 100% { transform: translateX(0); }
   50%      { transform: translateX(-5px); }
 }
+
+/* Step success overlay */
 .face-success {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(19, 115, 51, 0.5);
+  background: rgba(52, 199, 89, 0.25);
   z-index: 5;
   pointer-events: none;
-  animation: success-flash 0.7s ease-out forwards;
+  animation: success-flash 0.8s ease-out forwards;
 }
 .face-success svg {
-  width: 52px;
-  height: 52px;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 2px 12px rgba(52,199,89,0.5));
 }
 .face-success .check-path {
   stroke-dasharray: 40;
   stroke-dashoffset: 40;
-  animation: check-draw 0.35s ease-out 0.15s forwards;
+  animation: check-draw 0.4s ease-out 0.15s forwards;
 }
 @keyframes success-flash {
   0%   { opacity: 0; }
-  20%  { opacity: 1; }
-  80%  { opacity: 1; }
+  15%  { opacity: 1; }
+  70%  { opacity: 1; }
   100% { opacity: 0; }
 }
 @keyframes check-draw {
   to { stroke-dashoffset: 0; }
 }
-.face-progress {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  z-index: 4;
-  pointer-events: none;
+
+/* Final celebration bounce */
+.face-viewport.celebrating {
+  animation: celebrate-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.progress-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.3);
-  border: 1.5px solid rgba(255,255,255,0.55);
-  transition: background 0.3s, border-color 0.3s, transform 0.3s;
+@keyframes celebrate-bounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.96); }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
 }
-.progress-dot.active {
-  background: var(--color-brand);
-  border-color: #fff;
-  transform: scale(1.25);
-  box-shadow: 0 0 6px rgba(26,115,232,0.6);
+
+/* Green glow pulse on final success */
+.face-viewport.celebrating .face-frame-ring {
+  animation: celebrate-glow 0.8s ease-out;
 }
-.progress-dot.done {
-  background: var(--color-success);
-  border-color: #fff;
+@keyframes celebrate-glow {
+  0%   { filter: drop-shadow(0 0 0px transparent); }
+  40%  { filter: drop-shadow(0 0 20px rgba(52,199,89,0.7)); }
+  100% { filter: drop-shadow(0 0 8px rgba(52,199,89,0.3)); }
 }
+
+/* Face instruction text */
 .face-instruction {
   position: absolute;
-  bottom: 28px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 500;
   color: #fff;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
   text-align: center;
   white-space: nowrap;
   z-index: 4;
   pointer-events: none;
+  background: rgba(0,0,0,0.35);
+  padding: 4px 14px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity 0.3s;
 }
-.face-viewport.completing .face-frame-ring circle {
-  stroke: rgba(129,201,149,0.7);
+
+/* State colors on guide ring */
+.face-viewport.completing .ring-guide {
+  stroke: rgba(52,199,89,0.4);
   transition: stroke 0.4s;
 }
-.face-viewport.scanning .face-frame-ring circle {
-  stroke: rgba(66,133,244,0.75);
-  animation: face-ring-scan 1.5s ease-in-out infinite;
+.face-viewport.scanning .ring-guide {
+  stroke: rgba(66,133,244,0.5);
+  animation: ring-scan-pulse 2s ease-in-out infinite;
 }
-@keyframes face-ring-scan {
-  0%, 100% { stroke-opacity: 0.5; stroke-width: 2.5; }
-  50% { stroke-opacity: 1; stroke-width: 3.5; }
+@keyframes ring-scan-pulse {
+  0%, 100% { stroke-opacity: 0.3; }
+  50%      { stroke-opacity: 0.7; }
 }
-.face-viewport.failed .face-frame-ring circle {
-  stroke: rgba(220,53,69,0.75);
+.face-viewport.failed .ring-guide {
+  stroke: rgba(220,53,69,0.5);
   transition: stroke 0.4s;
 }
+
+/* Failure overlay */
 .face-failure {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(220,53,69,0.25);
+  background: rgba(220,53,69,0.2);
   z-index: 5;
   animation: failure-flash 0.7s ease-out forwards;
   pointer-events: none;
@@ -887,7 +986,7 @@ video {
 .face-failure svg {
   width: 52px;
   height: 52px;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 2px 8px rgba(220,53,69,0.4));
 }
 .face-failure .x-path {
   stroke-dasharray: 30;
@@ -902,6 +1001,28 @@ video {
 }
 @keyframes x-draw {
   to { stroke-dashoffset: 0; }
+}
+/* Failure shake */
+.face-viewport.failed {
+  animation: failure-shake 0.4s ease-out;
+}
+@keyframes failure-shake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-3px); }
+  30%      { transform: translateX(3px); }
+  45%      { transform: translateX(-3px); }
+  60%      { transform: translateX(3px); }
+  75%      { transform: translateX(-2px); }
+  90%      { transform: translateX(2px); }
+}
+
+/* Manual mode pulse hint */
+.manual-hint-pulse {
+  animation: manual-pulse 1.5s ease-in-out 3;
+}
+@keyframes manual-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
 }
 .scan-status {
   text-align: center;
@@ -1763,7 +1884,13 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
 
           <div class="face-frame">
             <svg class="face-frame-ring" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-dasharray="8 4" fill="none"/>
+              <!-- Guide ring (subtle dashed) -->
+              <circle class="ring-guide" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="6 4" fill="none"/>
+              <!-- Progress arc (fills as steps complete) -->
+              <circle class="ring-progress" id="ring-progress" cx="100" cy="100" r="90" stroke="rgba(66,133,244,0.9)" stroke-width="3" fill="none"
+                stroke-dasharray="565.5" stroke-dashoffset="565.5" stroke-linecap="round"/>
+              <!-- Glow ring (flashes on step success) -->
+              <circle class="ring-glow" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.6)" stroke-width="6" fill="none" opacity="0"/>
             </svg>
           </div>
 
@@ -1802,13 +1929,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
             </svg>
           </div>
 
-          <div class="face-progress">
-            <span class="progress-dot" id="dot-0"></span>
-            <span class="progress-dot" id="dot-1"></span>
-            <span class="progress-dot" id="dot-2"></span>
-          </div>
-
-          <div id="face-instruction" class="face-instruction">Position your face in the frame</div>
+          <div id="face-instruction" class="face-instruction">Position your face in the ring</div>
         </div>
 
         <small id="auto-state" class="muted">Auto-detection idle.</small>
@@ -1905,11 +2026,8 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
     const cueTurnLeft = document.getElementById('cue-turn-left');
     const faceSuccessEl = document.getElementById('face-success');
     const faceInstruction = document.getElementById('face-instruction');
-    const progressDots = [
-      document.getElementById('dot-0'),
-      document.getElementById('dot-1'),
-      document.getElementById('dot-2')
-    ];
+    const ringProgress = document.getElementById('ring-progress');
+    const RING_CIRCUMFERENCE = 2 * Math.PI * 90; // 565.5 for r=90
 
     let activeUsername = (initialAccount || '').trim().toLowerCase();
     let currentSessionUsername = (sessionUsername || '').trim().toLowerCase();
@@ -2436,43 +2554,80 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       return action;
     }
 
-    function updateOverlay() {
-      if (cueBlink) cueBlink.style.display = 'none';
-      if (cueTurnRight) cueTurnRight.style.display = 'none';
-      if (cueTurnLeft) cueTurnLeft.style.display = 'none';
+    function setRingProgress(fraction) {
+      if (!ringProgress) return;
+      var offset = RING_CIRCUMFERENCE * (1 - Math.min(1, Math.max(0, fraction)));
+      ringProgress.setAttribute('stroke-dashoffset', String(offset));
+    }
 
-      for (let i = 0; i < progressDots.length; i++) {
-        const dot = progressDots[i];
-        if (!dot) continue;
-        dot.className = 'progress-dot';
-        if (i < pointer) dot.classList.add('done');
-        else if (i === pointer) dot.classList.add('active');
-      }
+    function updateOverlay() {
+      // Cross-fade cue icons: exit current then show next
+      var allCues = [cueBlink, cueTurnRight, cueTurnLeft];
+      allCues.forEach(function(el) {
+        if (el && el.style.display !== 'none') {
+          el.classList.add('cue-exit');
+          var ref = el;
+          setTimeout(function() { ref.style.display = 'none'; ref.classList.remove('cue-exit'); }, 250);
+        } else if (el) {
+          el.style.display = 'none';
+        }
+      });
+
+      // Update progress arc
+      var total = challengeSequence.length || 3;
+      setRingProgress(pointer / total);
 
       if (pointer >= challengeSequence.length) {
         if (faceInstruction) faceInstruction.textContent = 'Verifying...';
-        if (faceViewport) faceViewport.classList.add('completing');
+        if (faceViewport) {
+          faceViewport.classList.add('completing');
+          faceViewport.classList.remove('scanning');
+          // Final celebration
+          faceViewport.classList.add('celebrating');
+          setTimeout(function() { faceViewport.classList.remove('celebrating'); }, 700);
+        }
+        setRingProgress(1);
         return;
       }
 
-      const action = challengeSequence[pointer];
-      if (action === 'blink' && cueBlink) cueBlink.style.display = 'flex';
-      else if (action === 'turn_right' && cueTurnRight) cueTurnRight.style.display = 'flex';
-      else if (action === 'turn_left' && cueTurnLeft) cueTurnLeft.style.display = 'flex';
+      var action = challengeSequence[pointer];
+      // Show next cue icon with delay for cross-fade
+      setTimeout(function() {
+        if (action === 'blink' && cueBlink) { cueBlink.style.display = 'flex'; cueBlink.classList.remove('cue-exit'); }
+        else if (action === 'turn_right' && cueTurnRight) { cueTurnRight.style.display = 'flex'; cueTurnRight.classList.remove('cue-exit'); }
+        else if (action === 'turn_left' && cueTurnLeft) { cueTurnLeft.style.display = 'flex'; cueTurnLeft.classList.remove('cue-exit'); }
+      }, pointer > 0 ? 280 : 0);
 
       if (faceInstruction) {
-        const lbl = action === 'turn_left' ? 'Turn left' : action === 'turn_right' ? 'Turn right' : 'Blink';
-        faceInstruction.textContent = 'Step ' + (pointer + 1) + '/' + challengeSequence.length + ': ' + lbl;
+        var lbl = action === 'turn_left' ? 'Turn left' : action === 'turn_right' ? 'Turn right' : 'Blink';
+        faceInstruction.textContent = (pointer + 1) + '/' + total + ' \u2014 ' + lbl;
       }
     }
 
     function showStepSuccess() {
-      const el = document.getElementById('face-success');
+      // Haptic viewport bounce
+      if (faceViewport) {
+        faceViewport.classList.remove('step-bounce');
+        void faceViewport.offsetWidth;
+        faceViewport.classList.add('step-bounce');
+        setTimeout(function() { faceViewport.classList.remove('step-bounce'); }, 400);
+      }
+
+      // Ring glow flash
+      if (faceViewport) {
+        faceViewport.classList.remove('step-glow');
+        void faceViewport.offsetWidth;
+        faceViewport.classList.add('step-glow');
+        setTimeout(function() { faceViewport.classList.remove('step-glow'); }, 600);
+      }
+
+      // Brief success overlay
+      var el = document.getElementById('face-success');
       if (!el) return;
       el.style.display = 'none';
       void el.offsetWidth;
       el.style.display = 'flex';
-      setTimeout(function() { el.style.display = 'none'; }, 700);
+      setTimeout(function() { el.style.display = 'none'; }, 800);
     }
 
     function stopCamera() {
@@ -2488,6 +2643,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       stream = null;
       if (faceViewport) {
         faceViewport.style.display = 'none';
+        faceViewport.classList.remove('scanning', 'face-detected');
       }
     }
 
@@ -2500,10 +2656,51 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       setStatus('Verifying face challenge...');
 
       try {
-        setText('liveness-state', 'Extracting biometric data...');
+        // ── "Look straight" capture phase ──
+        // After liveness actions, the user may have their head turned or be mid-blink.
+        // We pause briefly, instruct them to look straight, then take multiple samples
+        // and pick the best-quality descriptor for biometric matching.
+        setText('liveness-state', 'Look straight at the camera...');
+        if (faceInstruction) faceInstruction.textContent = 'Look straight at the camera';
+        // Hide any remaining cue icons
+        if (cueBlink) cueBlink.style.display = 'none';
+        if (cueTurnRight) cueTurnRight.style.display = 'none';
+        if (cueTurnLeft) cueTurnLeft.style.display = 'none';
+
+        // Brief pause so user can center their face
+        await new Promise(function(r) { setTimeout(r, 800); });
+
+        setText('liveness-state', 'Capturing face...');
         const videoEl = document.getElementById('preview');
         try {
-          const descriptor = await extractFaceEmbedding(videoEl);
+          // Take up to 3 samples, keep the one with the highest detection score
+          var bestDescriptor = null;
+          var bestScore = 0;
+          var captureAttempts = 3;
+          for (var ci = 0; ci < captureAttempts; ci++) {
+            try {
+              await ZAuthFace.loadFaceApiModels();
+              var detection = await faceapi
+                .detectSingleFace(videoEl)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+              if (detection && detection.detection.score > bestScore) {
+                bestScore = detection.detection.score;
+                bestDescriptor = detection.descriptor;
+              }
+              log('Capture attempt ' + (ci + 1) + ': score=' + (detection ? detection.detection.score.toFixed(3) : 'none'));
+            } catch (_capErr) {
+              log('Capture attempt ' + (ci + 1) + ' failed');
+            }
+            if (ci < captureAttempts - 1) {
+              await new Promise(function(r) { setTimeout(r, 300); });
+            }
+          }
+
+          if (!bestDescriptor) throw new Error('No face detected after multiple attempts');
+
+          const descriptor = bestDescriptor;
+          log('Best capture score: ' + bestScore.toFixed(3));
           const quantized = quantizeEmbedding(descriptor);
           const biometricHash = await hashEmbedding(quantized);
           const embeddingBase64 = float32ToBase64(descriptor);
@@ -2628,6 +2825,12 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         await trackStep('face', 'error', String(error?.message || 'liveness_failed'));
         setStatus('Face verification failed: ' + error.message, 'error');
         setText('liveness-state', 'Verification failed: ' + error.message);
+        // Failure animation: red ring + shake
+        if (faceViewport) {
+          faceViewport.classList.remove('completing', 'celebrating', 'face-detected');
+          faceViewport.classList.add('failed');
+          setTimeout(function() { faceViewport.classList.remove('failed'); }, 600);
+        }
       } finally {
         stopCamera();
         submitting = false;
@@ -2640,7 +2843,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       if (action !== expected) return;
 
       const now = Date.now();
-      if (now - lastEventAt < 800) return;
+      if (now - lastEventAt < 500) return;
       lastEventAt = now;
 
       events.push({
@@ -2649,6 +2852,8 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         confidence: Number((confidence || 0.9).toFixed(3))
       });
       pointer += 1;
+      // Stop scan line after first action completes
+      if (faceViewport) faceViewport.classList.remove('scanning');
       showStepSuccess();
       updateOverlay();
 
@@ -2670,17 +2875,17 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       const ear = getBlinkRatio(landmarks);
       const rawOffset = getNoseOffset(landmarks);
 
-      if (baselineOffset === null && Math.abs(rawOffset) < 0.08) {
+      if (baselineOffset === null && Math.abs(rawOffset) < 0.06) {
         baselineOffset = rawOffset;
       }
       const offset = baselineOffset === null ? rawOffset : rawOffset - baselineOffset;
 
       if (expected === 'blink') {
-        if (ear < 0.18) {
+        if (ear < 0.21) {
           blinkClosed = true;
           return;
         }
-        if (blinkClosed && ear > 0.23) {
+        if (blinkClosed && ear > 0.26) {
           blinkClosed = false;
           const confidence = Math.max(0.78, Math.min(0.98, 1 - Math.abs(0.2 - ear)));
           recordAction('blink', confidence);
@@ -2689,7 +2894,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       }
 
       const magnitude = Math.abs(offset);
-      if (magnitude < 0.08) return;
+      if (magnitude < 0.06) return;
       const observedSign = offset > 0 ? 1 : -1;
 
       if (rightTurnSign === null) {
@@ -2715,16 +2920,58 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
       faceMesh.setOptions({
         maxNumFaces: 1,
         refineLandmarks: true,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.6
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
       });
+      var faceDetectedFrames = 0;
+      var faceLostFrames = 0;
+      var detectionStartTime = Date.now();
+      var hintShown = false;
+      var manualHintShown = false;
+
       faceMesh.onResults((results) => {
         const faces = results.multiFaceLandmarks || [];
+        const elapsed = Date.now() - detectionStartTime;
+
         if (!faces.length) {
-          setText('auto-state', 'Face not detected. Keep your face centered.');
+          faceDetectedFrames = 0;
+          faceLostFrames++;
+          if (faceViewport) faceViewport.classList.remove('face-detected');
+          if (faceViewport) faceViewport.classList.add('scanning');
+
+          if (faceLostFrames > 15) {
+            setText('auto-state', 'Move closer and center your face in the ring.');
+          } else {
+            setText('auto-state', 'Looking for your face...');
+          }
+
+          // Auto-hint after 5 seconds
+          if (!hintShown && elapsed > 5000) {
+            hintShown = true;
+            setText('auto-state', 'Having trouble? Try better lighting or move closer.');
+          }
+          // Auto-show manual button after 10 seconds
+          if (!manualHintShown && elapsed > 10000 && pointer === 0) {
+            manualHintShown = true;
+            setManualVisible(true);
+            if (manualToggleBtn) manualToggleBtn.classList.add('manual-hint-pulse');
+            setText('auto-state', 'Auto detection struggling. You can use manual mode.');
+          }
           return;
         }
-        setText('auto-state', 'Face detected. Performing auto checks.');
+
+        faceLostFrames = 0;
+        faceDetectedFrames++;
+        if (faceViewport) {
+          faceViewport.classList.add('face-detected');
+          faceViewport.classList.remove('scanning');
+        }
+
+        if (faceDetectedFrames <= 3 && pointer === 0) {
+          setText('auto-state', 'Face detected. Hold still...');
+        } else {
+          setText('auto-state', 'Tracking \u2714 \u2014 Perform the action shown.');
+        }
         handleFaceLandmarks(faces[0]);
       });
 
@@ -2734,13 +2981,13 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
             await faceMesh.send({ image: videoElement });
           }
         },
-        width: 640,
-        height: 480
+        width: 1280,
+        height: 720
       });
       detectorActive = true;
       await camera.start();
       stream = videoElement.srcObject || stream;
-      setText('auto-state', 'Auto detection is active.');
+      setText('auto-state', 'Initializing face detection...');
     }
 
     async function startLiveness() {
@@ -2781,8 +3028,10 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         stopCamera();
         if (faceViewport) {
           faceViewport.style.display = 'block';
-          faceViewport.classList.remove('completing');
+          faceViewport.classList.remove('completing', 'celebrating', 'failed', 'face-detected', 'step-bounce', 'step-glow');
+          faceViewport.classList.add('scanning');
         }
+        setRingProgress(0);
         updateOverlay();
 
         try {
@@ -3101,22 +3350,25 @@ uiRouter.get("/ui/recovery", (req, res) => {
           </div>
           <div class="helper-line">Look at the camera. We'll automatically scan and match your face.</div>
 
-          <div id="recovery-face-viewport" class="face-viewport" style="margin:12px auto 0;">
+          <div id="recovery-face-viewport" class="face-viewport scanning" style="margin:12px auto 0;">
             <video id="face-video" autoplay playsinline muted></video>
             <div class="face-frame">
               <svg class="face-frame-ring" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-dasharray="8 4" fill="none"/>
+                <circle class="ring-guide" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="6 4" fill="none"/>
+                <circle class="ring-progress" cx="100" cy="100" r="90" stroke="rgba(66,133,244,0.9)" stroke-width="3" fill="none"
+                  stroke-dasharray="565.5" stroke-dashoffset="565.5" stroke-linecap="round"/>
+                <circle class="ring-glow" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.6)" stroke-width="6" fill="none" opacity="0"/>
               </svg>
             </div>
             <div class="face-success" style="display:none;">
               <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="26" cy="26" r="24" fill="rgba(46,160,67,0.45)"/>
-                <path class="check-path" d="M15 27 L23 35 L37 19" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <circle cx="26" cy="26" r="24" stroke="#fff" stroke-width="2.5" fill="none"/>
+                <polyline class="check-path" points="15,27 23,35 37,19" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
               </svg>
             </div>
             <div class="face-failure" style="display:none;">
               <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="26" cy="26" r="24" fill="rgba(220,53,69,0.45)"/>
+                <circle cx="26" cy="26" r="24" fill="rgba(220,53,69,0.35)"/>
                 <path class="x-path" d="M18 18 L34 34" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
                 <path class="x-path" d="M34 18 L18 34" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/>
               </svg>
@@ -3277,8 +3529,10 @@ uiRouter.get("/ui/recovery", (req, res) => {
         // Server mismatch
         if (data.reason === 'face_mismatch') {
           mismatches++;
+          viewport.classList.add('failed');
           ZAuthFace.showFailureOverlay('recovery-face-viewport');
           setScanStatus('Face did not match (' + mismatches + '/' + MAX_SERVER_MISMATCHES + '). Retrying...', 'error');
+          setTimeout(function() { viewport.classList.remove('failed'); }, 600);
         } else {
           const reasons = {
             recovery_token_expired: 'Recovery session expired. Please start over.',
@@ -3308,9 +3562,13 @@ uiRouter.get("/ui/recovery", (req, res) => {
     function onScanSuccess(data) {
       scanActive = false;
       viewport.classList.remove('scanning');
-      viewport.classList.add('completing');
+      viewport.classList.add('completing', 'celebrating');
+      // Fill progress ring to 100%
+      var ring = viewport.querySelector('.ring-progress');
+      if (ring) ring.setAttribute('stroke-dashoffset', '0');
       ZAuthFace.showSuccessOverlay('recovery-face-viewport');
       setScanStatus('Identity verified!', 'success');
+      setTimeout(function() { viewport.classList.remove('celebrating'); }, 700);
       setStatus('Identity verified! Redirecting to re-enrollment...');
 
       setTimeout(() => {
@@ -3431,17 +3689,20 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
             <span class="passkey-panel-title">Biometric enrollment</span>
           </div>
           <div class="helper-line">Complete face verification and zero-knowledge proof to restore your identity.</div>
-          <div id="enroll-face-viewport" class="face-viewport" style="margin:12px auto 0;">
+          <div id="enroll-face-viewport" class="face-viewport scanning" style="margin:12px auto 0;">
             <video id="face-video" autoplay playsinline muted></video>
             <div class="face-frame">
               <svg class="face-frame-ring" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-dasharray="8 4" fill="none"/>
+                <circle class="ring-guide" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="6 4" fill="none"/>
+                <circle class="ring-progress" cx="100" cy="100" r="90" stroke="rgba(66,133,244,0.9)" stroke-width="3" fill="none"
+                  stroke-dasharray="565.5" stroke-dashoffset="565.5" stroke-linecap="round"/>
+                <circle class="ring-glow" cx="100" cy="100" r="90" stroke="rgba(255,255,255,0.6)" stroke-width="6" fill="none" opacity="0"/>
               </svg>
             </div>
             <div class="face-success" style="display:none;">
               <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="26" cy="26" r="24" fill="rgba(46,160,67,0.45)"/>
-                <path class="check-path" d="M15 27 L23 35 L37 19" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <circle cx="26" cy="26" r="24" stroke="#fff" stroke-width="2.5" fill="none"/>
+                <polyline class="check-path" points="15,27 23,35 37,19" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
               </svg>
             </div>
           </div>
@@ -3550,9 +3811,13 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
         const biometricHash = await ZAuthFace.computeBiometricHash(descriptor);
 
         viewport.classList.remove('scanning');
-        viewport.classList.add('completing');
+        viewport.classList.add('completing', 'celebrating');
+        // Fill progress ring to 100%
+        var enrollRing = viewport.querySelector('.ring-progress');
+        if (enrollRing) enrollRing.setAttribute('stroke-dashoffset', '0');
         ZAuthFace.showSuccessOverlay('enroll-face-viewport');
         setEnrollScan('Face captured!', 'success');
+        setTimeout(function() { viewport.classList.remove('celebrating'); }, 700);
         setStatus('Starting Pramaan V2 enrollment...');
 
         // 1. Start enrollment
