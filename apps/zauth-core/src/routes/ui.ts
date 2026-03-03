@@ -2185,7 +2185,16 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
 
     async function buildZkProof(uid, challengeHash, challengeField, extraContext) {
       if (zkMode === 'real' && window.snarkjs && challengeField) {
-        const preimageHex = lastFaceEmbedding ? lastFaceEmbedding.hash : await sha256Hex('enroll:' + activeUsername + ':' + (enrollmentDraft ? enrollmentDraft.enrollment_id : ''));
+        // Patent-aligned: use the ENROLLMENT hash as ZK preimage when available.
+        // This ensures Poseidon(preimage) matches the commitment stored at enrollment.
+        // The enrollmentHash is set by the client-side Euclidean distance matcher
+        // which confirms the live face matches the enrolled face before releasing
+        // the original hash for proof generation.
+        const preimageHex = (lastFaceEmbedding && lastFaceEmbedding.enrollmentHash)
+          ? lastFaceEmbedding.enrollmentHash
+          : lastFaceEmbedding
+            ? lastFaceEmbedding.hash
+            : await sha256Hex('enroll:' + activeUsername + ':' + (enrollmentDraft ? enrollmentDraft.enrollment_id : ''));
         return buildRealZkProof(preimageHex, challengeField);
       }
       return buildMockZkProof(uid, challengeHash, extraContext);
@@ -2343,8 +2352,10 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           public_signals: payload.publicSignals,
           handoff_id: handoffId
       };
-      if (lastFaceEmbedding && lastFaceEmbedding.hash) {
-        submitBody.biometric_hash = lastFaceEmbedding.hash;
+      if (lastFaceEmbedding) {
+        // Send the enrollment hash if available (from on-device face matching),
+        // otherwise fall back to the live hash (first login on device / enrollment)
+        submitBody.biometric_hash = lastFaceEmbedding.enrollmentHash || lastFaceEmbedding.hash;
       }
       const submitResp = await fetch('/pramaan/v2/proof/submit', {
         method: 'POST',
@@ -2412,6 +2423,27 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         did: data.did,
         commitment_root: commitmentRoot
       };
+
+      // Patent-aligned: store enrollment biometric on-device (IndexedDB).
+      // Raw descriptor stays on-device only — NEVER sent to server.
+      // On subsequent logins, we match the live face against this stored
+      // descriptor using Euclidean distance, then use the ORIGINAL enrollment
+      // hash as the ZK preimage so Poseidon(preimage) matches the server's
+      // stored commitment. This ensures the ZK proof cryptographically binds
+      // to the biometric identity from enrollment.
+      if (lastFaceEmbedding && lastFaceEmbedding.descriptor && username) {
+        try {
+          await ZAuthFace.storeEnrollmentBiometric(
+            username,
+            lastFaceEmbedding.descriptor,
+            lastFaceEmbedding.hash
+          );
+          log('Enrollment biometric stored on-device (IndexedDB)');
+        } catch (storeErr) {
+          log('Warning: could not store enrollment biometric: ' + storeErr.message);
+        }
+      }
+
       if (data.recovery_codes && data.recovery_codes.length) {
         signupRecoveryCodes = data.recovery_codes;
       }
@@ -2616,7 +2648,7 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           const quantized = quantizeEmbedding(descriptor);
           const biometricHash = await hashEmbedding(quantized);
           const embeddingBase64 = float32ToBase64(descriptor);
-          lastFaceEmbedding = { quantized, hash: biometricHash, base64: embeddingBase64 };
+          lastFaceEmbedding = { descriptor, quantized, hash: biometricHash, base64: embeddingBase64 };
           log('Face embedding extracted (float32), biometric ID: ' + biometricHash.substring(0, 16) + '...');
         } catch (embErr) {
           log('Embedding extraction failed: ' + embErr.message);
@@ -2663,11 +2695,39 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           throw new Error('Identity not available for proof verification');
         }
 
-        // Biometric identity is verified through liveness + ZK proof binding.
-        // We do NOT compare SHA-256 hashes across sessions because face-api.js
-        // produces slightly different descriptors each capture, making exact
-        // hash matching impossible. The ZK proof proves knowledge of the
-        // biometric commitment preimage, which is the real binding.
+        // Patent-aligned biometric identity verification:
+        // 1. Retrieve the enrollment descriptor from on-device IndexedDB
+        // 2. Euclidean distance match: live face vs enrollment (threshold 0.6)
+        // 3. If matched, use the ORIGINAL enrollment hash as ZK preimage
+        //    so Poseidon(preimage) matches the server's stored zk_commitment
+        // Raw embeddings NEVER leave the device.
+        if (!signupMode && !enrollmentDraft && lastFaceEmbedding && activeUsername) {
+          setText('liveness-state', 'Matching biometric identity...');
+          try {
+            const enrollment = await ZAuthFace.getEnrollmentBiometric(activeUsername);
+            if (enrollment) {
+              const match = ZAuthFace.matchDescriptors(
+                lastFaceEmbedding.descriptor,
+                enrollment.descriptor
+              );
+              log('Biometric match distance: ' + match.distance.toFixed(4) + ' (threshold: 0.6)');
+              if (!match.matched) {
+                throw new Error('Face does not match enrolled identity (distance: ' + match.distance.toFixed(3) + '). Please try again or use recovery codes.');
+              }
+              // Use the ORIGINAL enrollment hash as ZK preimage
+              // This ensures Poseidon(preimage) matches the stored commitment
+              lastFaceEmbedding.enrollmentHash = enrollment.biometricHash;
+              log('Using enrollment biometric hash as ZK preimage');
+            } else {
+              log('No on-device enrollment found — first login on this device, using live hash');
+            }
+          } catch (matchErr) {
+            if (matchErr.message.includes('does not match')) {
+              throw matchErr;
+            }
+            log('On-device biometric lookup failed: ' + matchErr.message + ' — using live hash');
+          }
+        }
 
         await runAuthenticationProof(identity.uid);
         faceComplete = true;
@@ -3695,6 +3755,14 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
         });
         const completeData = await completeResp.json();
         if (!completeResp.ok) throw new Error(completeData.reason || completeData.error || 'Enrollment failed');
+
+        // Store enrollment biometric on-device for future logins
+        try {
+          const recoveryUsername = document.getElementById('recovery-username')?.value || 'unknown';
+          await ZAuthFace.storeEnrollmentBiometric(recoveryUsername, descriptor, biometricHash);
+        } catch (storeErr) {
+          console.warn('Could not store enrollment biometric:', storeErr);
+        }
 
         // Stop camera
         ZAuthFace.stopCameraStream(videoStream);

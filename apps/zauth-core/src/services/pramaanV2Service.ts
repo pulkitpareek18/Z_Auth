@@ -354,23 +354,32 @@ export async function submitProof(input: {
   // The server stores only an irreversible SHA-256 hash of the face descriptor
   // (the "biometric commitment"). Raw face embeddings NEVER leave the user's device.
   //
-  // IMPORTANT: We do NOT compare biometric hashes across sessions because face-api.js
-  // produces slightly different descriptors each capture (lighting, angle, frame timing).
-  // SHA-256 is not a fuzzy matcher — any byte difference produces a completely different
-  // hash. Instead, identity binding is proven through:
-  //   1. Liveness detection (real face present)
-  //   2. ZK proof (proves knowledge of biometric commitment preimage)
-  //   3. Passkey (device possession)
+  // Patent-aligned ZK proof verification:
+  //   1. Client captures face → matches against on-device enrollment (Euclidean distance)
+  //   2. If matched, client uses the ORIGINAL enrollment hash as ZK preimage
+  //   3. Server verifies Poseidon(preimage) matches stored zk_commitment from enrollment
+  //   4. This proves the same biometric identity without revealing the biometric itself
 
   const expectedChallengeHash = sha256(`${request.uid}:${request.challenge}`);
 
+  // Retrieve the stored enrollment commitment for ZK proof verification.
+  // The zk_commitment is Poseidon(biometric_hash) stored at enrollment time.
+  // During login, the client uses the original enrollment hash as preimage,
+  // so Poseidon(preimage) should match this stored value.
+  const commitmentRow = await pool.query<{ zk_commitment: string | null }>(
+    `SELECT zk_commitment FROM pramaan_identity_map WHERE uid = $1`,
+    [request.uid]
+  );
+  const storedCommitment = commitmentRow.rows[0]?.zk_commitment ?? undefined;
+
   // ZK proof verification: proves identity binding without revealing biometric data.
-  // The ZK proof ensures challenge freshness and identity binding.
+  // The expectedCommitment check ensures the proof binds to the enrolled biometric.
   const verification = await verifyZkProof({
     uid: request.uid,
     expectedChallengeHash: config.zkVerifierMode === "real" ? hexToFieldElement(expectedChallengeHash) : expectedChallengeHash,
     zkProof: input.zkProof,
-    publicSignals: input.publicSignals
+    publicSignals: input.publicSignals,
+    expectedCommitment: storedCommitment
   });
 
   // Blockchain-ready: INSERT nullifier instead of UPDATE consumed = TRUE.

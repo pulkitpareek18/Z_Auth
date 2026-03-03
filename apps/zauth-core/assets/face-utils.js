@@ -173,6 +173,138 @@
     return hashEmbedding(quantized);
   }
 
+  /* ── Euclidean distance for fuzzy face matching ── */
+
+  /**
+   * Compute Euclidean distance between two Float32Array descriptors.
+   * face-api.js uses L2 distance: same person < 0.6, different > 0.6.
+   *
+   * @param {Float32Array} a - first descriptor (128-dim)
+   * @param {Float32Array} b - second descriptor (128-dim)
+   * @returns {number} Euclidean distance
+   */
+  function euclideanDistance(a, b) {
+    var sum = 0;
+    for (var i = 0; i < a.length; i++) {
+      var diff = a[i] - b[i];
+      sum += diff * diff;
+    }
+    return Math.sqrt(sum);
+  }
+
+  /* ── On-device biometric store (IndexedDB) ────── */
+  //
+  // Patent-aligned: biometric data stays on-device only.
+  // We store the enrollment descriptor + hash in IndexedDB so that
+  // during login, the client can:
+  //   1. Capture a new face and match it against the enrolled descriptor
+  //      using Euclidean distance (fuzzy matching, threshold 0.6)
+  //   2. If matched, use the ORIGINAL enrollment hash as the ZK preimage
+  //      so Poseidon(preimage) matches the stored server-side commitment
+  // Raw embeddings NEVER leave the device.
+
+  var DB_NAME = "zauth_biometric";
+  var DB_VERSION = 1;
+  var STORE_NAME = "enrollments";
+
+  function openBiometricDB() {
+    return new Promise(function (resolve, reject) {
+      var request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = function (event) {
+        var db = event.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: "username" });
+        }
+      };
+      request.onsuccess = function (event) {
+        resolve(event.target.result);
+      };
+      request.onerror = function () {
+        reject(new Error("Failed to open biometric IndexedDB"));
+      };
+    });
+  }
+
+  /**
+   * Store enrollment biometric on-device after successful enrollment.
+   * Stores: descriptor (Float32Array as base64), quantized hash, username.
+   * This data NEVER leaves the device — it's used only for client-side
+   * face matching on subsequent logins.
+   *
+   * @param {string} username
+   * @param {Float32Array} descriptor - raw 128-dim face descriptor
+   * @param {string} biometricHash - SHA-256 hex of quantized embedding
+   */
+  function storeEnrollmentBiometric(username, descriptor, biometricHash) {
+    return openBiometricDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE_NAME, "readwrite");
+        var store = tx.objectStore(STORE_NAME);
+        store.put({
+          username: username,
+          descriptor: float32ToBase64(descriptor),
+          biometricHash: biometricHash,
+          enrolledAt: Date.now()
+        });
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(new Error("Failed to store enrollment")); };
+      });
+    });
+  }
+
+  /**
+   * Retrieve enrollment biometric for client-side matching.
+   * Returns null if no enrollment exists for this username.
+   *
+   * @param {string} username
+   * @returns {Promise<{descriptor: Float32Array, biometricHash: string}|null>}
+   */
+  function getEnrollmentBiometric(username) {
+    return openBiometricDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE_NAME, "readonly");
+        var store = tx.objectStore(STORE_NAME);
+        var request = store.get(username);
+        request.onsuccess = function () {
+          var record = request.result;
+          if (!record) {
+            resolve(null);
+            return;
+          }
+          // Decode base64 back to Float32Array
+          var binary = atob(record.descriptor);
+          var bytes = new Uint8Array(binary.length);
+          for (var i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          resolve({
+            descriptor: new Float32Array(bytes.buffer),
+            biometricHash: record.biometricHash
+          });
+        };
+        request.onerror = function () { reject(new Error("Failed to read enrollment")); };
+      });
+    });
+  }
+
+  /**
+   * Match a live face descriptor against the enrolled descriptor.
+   * Uses Euclidean distance — face-api.js threshold: same person < 0.6.
+   *
+   * @param {Float32Array} liveDescriptor - fresh capture from camera
+   * @param {Float32Array} enrolledDescriptor - stored from enrollment
+   * @param {number} [threshold=0.6] - max distance to consider same person
+   * @returns {{matched: boolean, distance: number}}
+   */
+  function matchDescriptors(liveDescriptor, enrolledDescriptor, threshold) {
+    threshold = threshold || 0.6;
+    var dist = euclideanDistance(liveDescriptor, enrolledDescriptor);
+    return {
+      matched: dist < threshold,
+      distance: dist
+    };
+  }
+
   /* ── Public API ─────────────────────────────────── */
 
   window.ZAuthFace = {
@@ -182,6 +314,10 @@
     hashEmbedding: hashEmbedding,
     computeBiometricHash: computeBiometricHash,
     sha256Hex: sha256Hex,
+    euclideanDistance: euclideanDistance,
+    matchDescriptors: matchDescriptors,
+    storeEnrollmentBiometric: storeEnrollmentBiometric,
+    getEnrollmentBiometric: getEnrollmentBiometric,
     loadFaceApiModels: loadFaceApiModels,
     extractFaceEmbedding: extractFaceEmbedding,
     startCameraStream: startCameraStream,
