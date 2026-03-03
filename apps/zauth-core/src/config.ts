@@ -42,7 +42,8 @@ const schema = z.object({
   ANCHOR_CHAIN_CONTRACT: z.string().optional(),
   ANCHOR_PRIVATE_KEY: z.string().optional(),
   ANCHOR_IPFS_API: z.string().optional(),
-  ANCHOR_PINATA_JWT: z.string().optional()
+  ANCHOR_PINATA_JWT: z.string().optional(),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info")
 });
 
 const env = schema.parse(process.env);
@@ -89,5 +90,6 @@ export const config = {
   anchorChainContract: env.ANCHOR_CHAIN_CONTRACT,
   anchorPrivateKey: env.ANCHOR_PRIVATE_KEY,
   anchorIpfsApi: env.ANCHOR_IPFS_API,
-  anchorPinataJwt: env.ANCHOR_PINATA_JWT
+  anchorPinataJwt: env.ANCHOR_PINATA_JWT,
+  logLevel: env.LOG_LEVEL
 } as const;
