@@ -141,23 +141,10 @@ export async function verifyZkProof(input: {
   const normalizedProof = normalizeProof(input.zkProof);
 
   if (config.zkVerifierMode === "mock") {
-    // Even in mock mode, enforce biometric commitment binding.
-    // This prevents a different person's face from passing verification
-    // because Poseidon(different_hash) won't match the stored commitment.
-    if (input.expectedCommitment) {
-      const proofCommitment = Array.isArray(normalizedSignals)
-        ? String(normalizedSignals[0])
-        : String(signalsHash);
-      if (proofCommitment !== input.expectedCommitment) {
-        return {
-          verified: false,
-          reason: "commitment_mismatch",
-          publicSignalsHash: signalsHash,
-          mode: config.zkVerifierMode
-        };
-      }
-    }
-
+    // In mock mode, biometric identity binding is enforced at the service layer
+    // (pramaanV2Service.submitProof compares biometric_hash directly).
+    // The ZK commitment check is only meaningful in real mode where
+    // publicSignals[0] = Poseidon(biometric_hash) from the actual circuit.
     const supplied = typeof normalizedProof === "string" ? normalizedProof : String((normalizedProof as Record<string, unknown>).digest ?? "");
     const expected = computeMockProofDigest(input.expectedChallengeHash, signalsHash, input.uid);
     return {

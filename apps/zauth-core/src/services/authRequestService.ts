@@ -37,3 +37,15 @@ export async function isAuthRequestValid(requestId: string): Promise<boolean> {
   const request = await getAuthRequest(normalized);
   return Boolean(request);
 }
+
+/**
+ * Extend the TTL of an existing auth request (e.g., after handoff approval).
+ * This prevents the auth request from expiring between mobile approval and
+ * consent submission on desktop.
+ */
+export async function extendAuthRequest(requestId: string, extraSeconds?: number): Promise<void> {
+  const request = await getAuthRequest(requestId);
+  if (!request) return;
+  const ttl = extraSeconds ?? config.authRequestTtlSeconds;
+  await getCache().set(AUTH_REQ_PREFIX + requestId, JSON.stringify(request), ttl);
+}

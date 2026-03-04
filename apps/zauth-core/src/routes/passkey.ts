@@ -2,7 +2,7 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 import { config } from "../config.js";
 import { writeAuditEvent } from "../services/auditService.js";
-import { getAuthRequest } from "../services/authRequestService.js";
+import { extendAuthRequest, getAuthRequest } from "../services/authRequestService.js";
 import {
   approveHandoffByCode,
   consumeApprovedHandoff,
@@ -566,6 +566,13 @@ passkeyRouter.get("/auth/handoff/status", async (req, res) => {
   if (!consumed || !consumed.approvedBySubjectId || !consumed.approvedByUsername) {
     res.status(400).json({ status: "invalid_state" });
     return;
+  }
+
+  // Extend the auth request TTL so it doesn't expire between approval and consent.
+  // The user may have spent several minutes on mobile face verification + ZK proof,
+  // so the original 15-min TTL could be nearly exhausted by the time they reach consent.
+  if (consumed.requestId) {
+    await extendAuthRequest(consumed.requestId, 600); // fresh 10 minutes for consent
   }
 
   const session = await createSession(consumed.approvedBySubjectId, consumed.approvedByUsername, consumed.assurance);

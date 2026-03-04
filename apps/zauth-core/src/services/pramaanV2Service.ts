@@ -6,6 +6,7 @@ import { randomId, sha256 } from "../utils/crypto.js";
 import { getCache } from "./cacheService.js";
 import { signAttestationJwt } from "./keyService.js";
 import { hexToFieldElement, verifyZkProof } from "./zkService.js";
+import { logger } from "../utils/logger.js";
 
 const ENROLLMENT_PREFIX = "pramaan:v2:enrollment:";
 const ENROLLMENT_TTL_SECONDS = 10 * 60;
@@ -365,15 +366,35 @@ export async function submitProof(input: {
 
   const expectedChallengeHash = sha256(`${request.uid}:${request.challenge}`);
 
-  // Retrieve the stored enrollment commitment for ZK proof verification.
-  // The zk_commitment is Poseidon(biometric_hash) stored at enrollment time.
-  // During login, the client uses the original enrollment hash as preimage,
-  // so Poseidon(preimage) should match this stored value.
-  const commitmentRow = await pool.query<{ zk_commitment: string | null }>(
-    `SELECT zk_commitment FROM pramaan_identity_map WHERE uid = $1`,
+  // ── Server-side biometric identity binding ──
+  // The client sends biometric_hash (SHA-256 of quantized face embedding).
+  // On login, the client should send the ORIGINAL enrollment hash from IndexedDB,
+  // not the live capture hash (which varies between sessions).
+  // Compare against the stored enrollment biometric_hash to ensure same person.
+  const identityRow = await pool.query<{ biometric_hash: string | null; zk_commitment: string | null }>(
+    `SELECT biometric_hash, zk_commitment FROM pramaan_identity_map WHERE uid = $1`,
     [request.uid]
   );
-  const storedCommitment = commitmentRow.rows[0]?.zk_commitment ?? undefined;
+  const storedBiometricHash = identityRow.rows[0]?.biometric_hash ?? null;
+  const storedCommitment = identityRow.rows[0]?.zk_commitment ?? undefined;
+
+  // Direct biometric hash comparison: ensures the face used for login matches enrollment.
+  // This is the primary defense against impersonation in both mock and real modes.
+  if (storedBiometricHash && input.biometricHash) {
+    if (input.biometricHash !== storedBiometricHash) {
+      logger.warn("Biometric hash mismatch", {
+        uid: request.uid,
+        storedPrefix: storedBiometricHash.substring(0, 12),
+        submittedPrefix: input.biometricHash.substring(0, 12)
+      });
+      throw new Error("biometric_identity_mismatch");
+    }
+  } else if (!input.biometricHash) {
+    // No biometric hash submitted — reject if the account has one enrolled
+    if (storedBiometricHash) {
+      throw new Error("biometric_hash_required");
+    }
+  }
 
   // ZK proof verification: proves identity binding without revealing biometric data.
   // The expectedCommitment check ensures the proof binds to the enrolled biometric.
