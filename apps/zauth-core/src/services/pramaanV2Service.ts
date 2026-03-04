@@ -378,22 +378,32 @@ export async function submitProof(input: {
   const storedBiometricHash = identityRow.rows[0]?.biometric_hash ?? null;
   const storedCommitment = identityRow.rows[0]?.zk_commitment ?? undefined;
 
-  // Direct biometric hash comparison: ensures the face used for login matches enrollment.
-  // This is the primary defense against impersonation in both mock and real modes.
+  // Biometric hash comparison: when the client sends the enrollment hash
+  // (from IndexedDB, after on-device face matching), verify it matches what
+  // was stored during enrollment. This provides an extra identity-binding check.
+  //
+  // IMPORTANT: The client only sends biometric_hash when it has an on-device
+  // enrollment with a verified face match (Euclidean distance < 0.6).
+  // On new devices (no IndexedDB enrollment), biometric_hash is omitted.
+  // In that case, identity assurance comes from:
+  //   - Liveness detection (blink/head turn challenges)
+  //   - ZK proof binding (Poseidon commitment check)
+  //   - The client-side liveness verification that was already passed
   if (storedBiometricHash && input.biometricHash) {
     if (input.biometricHash !== storedBiometricHash) {
-      logger.warn("Biometric hash mismatch", {
+      logger.warn("Biometric hash mismatch — possible impersonation attempt", {
         uid: request.uid,
         storedPrefix: storedBiometricHash.substring(0, 12),
         submittedPrefix: input.biometricHash.substring(0, 12)
       });
       throw new Error("biometric_identity_mismatch");
     }
-  } else if (!input.biometricHash) {
-    // No biometric hash submitted — reject if the account has one enrolled
-    if (storedBiometricHash) {
-      throw new Error("biometric_hash_required");
-    }
+    logger.info("Biometric hash verified", { uid: request.uid });
+  } else if (!input.biometricHash && storedBiometricHash) {
+    // New device login — no enrollment hash available on client.
+    // This is normal: mobile phone doesn't have desktop's IndexedDB enrollment.
+    // Log for audit trail but allow login to proceed.
+    logger.info("No biometric hash submitted (new device login)", { uid: request.uid });
   }
 
   // ZK proof verification: proves identity binding without revealing biometric data.

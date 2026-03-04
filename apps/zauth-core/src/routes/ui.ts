@@ -2346,9 +2346,15 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
           handoff_id: handoffId
       };
       if (lastFaceEmbedding) {
-        // Send the enrollment hash if available (from on-device face matching),
-        // otherwise fall back to the live hash (first login on device / enrollment)
-        submitBody.biometric_hash = lastFaceEmbedding.enrollmentHash || lastFaceEmbedding.hash;
+        // ONLY send the enrollment hash from IndexedDB (proven match via on-device
+        // Euclidean distance check). Do NOT send the live capture hash — face
+        // embeddings are inherently noisy, so SHA-256(live_capture) will almost
+        // never equal SHA-256(enrollment_capture) even for the same person.
+        // When no enrollment hash is available (new device), omit biometric_hash
+        // entirely and let the ZK proof + liveness provide identity assurance.
+        if (lastFaceEmbedding.enrollmentHash) {
+          submitBody.biometric_hash = lastFaceEmbedding.enrollmentHash;
+        }
       }
       const submitResp = await fetch('/pramaan/v2/proof/submit', {
         method: 'POST',
