@@ -3878,9 +3878,9 @@ uiRouter.get("/ui/recovery/enroll", async (req, res) => {
           const challengeFieldInt = BigInt('0x' + challengeHash) & ((1n << 253n) - 1n);
           const snarkjs = await import('https://cdn.jsdelivr.net/npm/snarkjs@0.7.4/+esm');
           const { proof, publicSignals: ps } = await snarkjs.groth16.fullProve(
-            { biometricId: biometricIdInt.toString(), challengeHash: challengeFieldInt.toString() },
+            { preimage: biometricIdInt.toString(), challenge: challengeFieldInt.toString() },
             '/zk/biometric_commitment.wasm',
-            '/zk/biometric_commitment_final.zkey'
+            '/zk/circuit_final.zkey'
           );
           zkProof = proof;
           publicSignals = ps;
