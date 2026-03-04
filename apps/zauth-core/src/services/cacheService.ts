@@ -33,16 +33,28 @@ export type CacheLike = {
 };
 
 let redisClient: ReturnType<typeof createClient> | null = null;
+let cacheType: "redis" | "memory" = "memory";
 let cache: CacheLike = new InMemoryCache();
 
 export async function initializeCache(): Promise<void> {
   try {
     const client = createClient({ url: config.redisUrl });
+    const fallbackToMemory = () => {
+      console.warn("Redis connection lost. Falling back to in-memory cache.");
+      cacheType = "memory";
+      cache = new InMemoryCache();
+      redisClient = null;
+    };
     client.on("error", (error) => {
-      console.error("Redis error. Falling back to memory cache.", error);
+      console.error("Redis error:", error.message ?? error);
+      // Actually fall back to in-memory cache so operations don't throw
+      if (cacheType === "redis") {
+        fallbackToMemory();
+      }
     });
     await client.connect();
     redisClient = client;
+    cacheType = "redis";
     cache = {
       set: async (key, value, ttlSeconds) => {
         if (ttlSeconds) {
@@ -56,14 +68,20 @@ export async function initializeCache(): Promise<void> {
         await client.del(key);
       }
     };
+    console.log("Cache: using Redis");
   } catch (error) {
     console.warn("Redis unavailable. Using in-memory cache", error);
+    cacheType = "memory";
     cache = new InMemoryCache();
   }
 }
 
 export function getCache(): CacheLike {
   return cache;
+}
+
+export function getCacheType(): "redis" | "memory" {
+  return cacheType;
 }
 
 export async function closeCache(): Promise<void> {

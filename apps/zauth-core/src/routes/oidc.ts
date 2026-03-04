@@ -17,6 +17,8 @@ import { getJwks } from "../services/keyService.js";
 import { findIdentityForSubject } from "../services/pramaanV2Service.js";
 import { clearSessionCookie, deleteSession, getSession } from "../services/sessionService.js";
 import { findUserBySubject } from "../services/userService.js";
+import { hmacVerify } from "../utils/crypto.js";
+import { logger } from "../utils/logger.js";
 
 export const oidcRouter = Router();
 
@@ -200,12 +202,58 @@ oidcRouter.post("/oauth2/consent", async (req, res) => {
     return;
   }
 
-  const authRequest = await getAuthRequest(requestId);
+  // Primary path: look up auth request from cache.
+  let authRequest = await getAuthRequest(requestId);
+  let fromSignedPayload = false;
+
   if (!authRequest) {
-    // Auth request expired from cache (e.g., server restart wiped in-memory cache,
-    // or user took too long). Redirect to login to start fresh.
-    res.redirect("/ui/login");
-    return;
+    // Fallback: reconstruct from the HMAC-signed payload embedded in the consent form.
+    // This handles cache eviction / server restart between GET and POST.
+    const payloadRaw = String(req.body._consent_payload ?? "");
+    const sig = String(req.body._consent_sig ?? "");
+
+    if (payloadRaw && sig && hmacVerify(payloadRaw, sig, config.tenantSalt)) {
+      try {
+        const p = JSON.parse(payloadRaw) as {
+          rid: string; cid: string; ruri: string; scope: string;
+          state: string; cc: string; ccm: string; nonce: string; ts: number;
+        };
+        // Ensure the signed request_id matches the form field to prevent replay with different IDs.
+        if (p.rid === requestId) {
+          // Reject payloads older than 10 minutes (anti-replay).
+          if (Date.now() - p.ts < 10 * 60 * 1000) {
+            // Validate client + redirect_uri exactly as handleAuthorize does.
+            const signedClient = await getClient(p.cid);
+            if (signedClient && hasRedirectUri(signedClient, p.ruri)) {
+              authRequest = {
+                requestId: p.rid,
+                responseType: "code",
+                clientId: p.cid,
+                redirectUri: p.ruri,
+                scope: p.scope,
+                state: p.state || undefined,
+                codeChallenge: p.cc || undefined,
+                codeChallengeMethod: p.ccm || undefined,
+                nonce: p.nonce || undefined,
+                createdAt: p.ts
+              };
+              fromSignedPayload = true;
+              logger.info("consent POST: recovered auth request from signed payload", { requestId });
+            }
+          } else {
+            logger.warn("consent POST: signed payload too old", { requestId, age: Date.now() - p.ts });
+          }
+        }
+      } catch {
+        logger.warn("consent POST: failed to parse signed payload", { requestId });
+      }
+    }
+
+    if (!authRequest) {
+      logger.warn("consent POST: auth request not found and no valid signed fallback", { requestId });
+      res.redirect("/ui/login");
+      return;
+    }
   }
 
   const sid = req.cookies.zauth_sid as string | undefined;
@@ -216,7 +264,7 @@ oidcRouter.post("/oauth2/consent", async (req, res) => {
   }
 
   if (decision !== "allow") {
-    await deleteAuthRequest(requestId);
+    if (!fromSignedPayload) await deleteAuthRequest(requestId);
     if (sid) {
       await deleteSession(sid);
       clearSessionCookie(res);
@@ -243,7 +291,7 @@ oidcRouter.post("/oauth2/consent", async (req, res) => {
     nonce: authRequest.nonce
   });
 
-  await deleteAuthRequest(requestId);
+  if (!fromSignedPayload) await deleteAuthRequest(requestId);
 
   const redirectUrl = new URL(authRequest.redirectUri);
   redirectUrl.searchParams.set("code", code);
@@ -259,7 +307,8 @@ oidcRouter.post("/oauth2/consent", async (req, res) => {
     traceId: req.traceId,
     payload: {
       client_id: authRequest.clientId,
-      scopes
+      scopes,
+      fromSignedPayload
     }
   });
 

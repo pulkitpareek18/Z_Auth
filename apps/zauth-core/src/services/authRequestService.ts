@@ -1,7 +1,8 @@
 import type { AuthRequest } from "../types/models.js";
 import { config } from "../config.js";
 import { randomId } from "../utils/crypto.js";
-import { getCache } from "./cacheService.js";
+import { logger } from "../utils/logger.js";
+import { getCache, getCacheType } from "./cacheService.js";
 
 const AUTH_REQ_PREFIX = "authreq:";
 
@@ -14,6 +15,7 @@ export async function createAuthRequest(
     createdAt: Date.now()
   };
   await getCache().set(AUTH_REQ_PREFIX + request.requestId, JSON.stringify(request), config.authRequestTtlSeconds);
+  logger.info("authRequest created", { requestId: request.requestId, clientId: request.clientId, ttl: config.authRequestTtlSeconds, cache: getCacheType() });
   return request;
 }
 
@@ -45,7 +47,11 @@ export async function isAuthRequestValid(requestId: string): Promise<boolean> {
  */
 export async function extendAuthRequest(requestId: string, extraSeconds?: number): Promise<void> {
   const request = await getAuthRequest(requestId);
-  if (!request) return;
+  if (!request) {
+    logger.warn("extendAuthRequest: request not found, cannot extend", { requestId });
+    return;
+  }
   const ttl = extraSeconds ?? config.authRequestTtlSeconds;
   await getCache().set(AUTH_REQ_PREFIX + requestId, JSON.stringify(request), ttl);
+  logger.info("extendAuthRequest: TTL refreshed", { requestId, ttl });
 }

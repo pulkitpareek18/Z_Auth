@@ -2,7 +2,9 @@ import { Router } from "express";
 import QRCode from "qrcode";
 import { config } from "../config.js";
 import { writeAuditEvent } from "../services/auditService.js";
-import { getAuthRequest } from "../services/authRequestService.js";
+import { extendAuthRequest, getAuthRequest } from "../services/authRequestService.js";
+import { hmacSign } from "../utils/crypto.js";
+import { logger } from "../utils/logger.js";
 import { getHandoffByCode } from "../services/handoffService.js";
 import { getClient } from "../services/oauthService.js";
 import { clearSessionCookie, deleteSession, getSession } from "../services/sessionService.js";
@@ -1722,13 +1724,19 @@ uiRouter.get("/ui/handoff/wait", (req, res) => {
       };
     }
 
+    let pollTimer = null;
+    let pollDone = false;
+
     const poll = async () => {
+      if (pollDone) return;
       try {
         const resp = await fetch('/auth/handoff/status?handoff_id=' + encodeURIComponent(handoffId));
         const data = await resp.json();
 
         if (!resp.ok) {
           if (resp.status === 410) {
+            pollDone = true;
+            if (pollTimer) clearInterval(pollTimer);
             setStatus('This request expired. Restart verification.', 'error');
             return;
           }
@@ -1742,17 +1750,23 @@ uiRouter.get("/ui/handoff/wait", (req, res) => {
         }
 
         if (data.status === 'denied') {
+          pollDone = true;
+          if (pollTimer) clearInterval(pollTimer);
           setStatus('Phone request denied. Restart or choose passkey fallback.', 'error');
           return;
         }
 
         if (data.status === 'approved') {
+          pollDone = true;
+          if (pollTimer) clearInterval(pollTimer);
           setStatus('Approved. Redirecting...', 'success');
           window.location.href = data.redirectTo || '/';
           return;
         }
 
         if (data.status === 'consumed') {
+          pollDone = true;
+          if (pollTimer) clearInterval(pollTimer);
           setStatus('Already consumed. Restart if needed.', 'error');
           return;
         }
@@ -1762,11 +1776,13 @@ uiRouter.get("/ui/handoff/wait", (req, res) => {
     };
 
     document.getElementById('retry-btn').onclick = () => {
+      pollDone = true;
+      if (pollTimer) clearInterval(pollTimer);
       const next = requestId ? '/ui/login?request_id=' + encodeURIComponent(requestId) : '/ui/login';
       window.location.href = next;
     };
 
-    setInterval(poll, 2000);
+    pollTimer = setInterval(poll, 2000);
     poll();
   </script>
   `;
@@ -3953,11 +3969,14 @@ uiRouter.get("/ui/consent", async (req, res) => {
 
   const authRequest = await getAuthRequest(requestId);
   if (!authRequest) {
-    // Auth request expired from cache — redirect to login to start a fresh flow.
-    // This handles server restarts wiping in-memory cache or genuinely expired requests.
+    logger.warn("consent GET: auth request not found in cache", { requestId });
     res.redirect("/ui/login");
     return;
   }
+
+  // Refresh TTL: ensure the auth request survives until the user clicks Allow/Deny.
+  // This is a belt-and-suspenders safeguard against cache eviction between GET and POST.
+  await extendAuthRequest(requestId, 300); // 5 more minutes from now
 
   const sid = req.cookies.zauth_sid as string | undefined;
   const session = await getSession(sid);
@@ -3968,6 +3987,24 @@ uiRouter.get("/ui/consent", async (req, res) => {
 
   const client = await getClient(authRequest.clientId);
   const scopes = authRequest.scope.split(/\s+/).filter(Boolean);
+
+  // Serialize critical auth request data as a signed blob so the POST handler
+  // can reconstruct it even if the cache entry disappears between GET and POST
+  // (e.g. server restart, Redis eviction, multi-instance with in-memory cache).
+  const consentPayload = JSON.stringify({
+    rid: requestId,
+    cid: authRequest.clientId,
+    ruri: authRequest.redirectUri,
+    scope: authRequest.scope,
+    state: authRequest.state ?? "",
+    cc: authRequest.codeChallenge ?? "",
+    ccm: authRequest.codeChallengeMethod ?? "",
+    nonce: authRequest.nonce ?? "",
+    ts: Date.now()
+  });
+  const consentSig = hmacSign(consentPayload, config.tenantSalt);
+
+  logger.info("consent GET: rendering consent page", { requestId, clientId: authRequest.clientId });
 
   const body = `
   <div class="card wide">
@@ -3988,6 +4025,8 @@ uiRouter.get("/ui/consent", async (req, res) => {
 
         <form method="post" action="/oauth2/consent">
           <input type="hidden" name="request_id" value="${escapeHtml(requestId)}" />
+          <input type="hidden" name="_consent_payload" value="${escapeHtml(consentPayload)}" />
+          <input type="hidden" name="_consent_sig" value="${consentSig}" />
           <div class="actions">
             <button class="secondary" name="decision" value="deny" type="submit">Cancel</button>
             <button class="primary" name="decision" value="allow" type="submit">Continue</button>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { writeAuditEvent } from "../services/auditService.js";
 import { extendAuthRequest, getAuthRequest } from "../services/authRequestService.js";
+import { logger } from "../utils/logger.js";
 import {
   approveHandoffByCode,
   consumeApprovedHandoff,
@@ -572,7 +573,17 @@ passkeyRouter.get("/auth/handoff/status", async (req, res) => {
   // The user may have spent several minutes on mobile face verification + ZK proof,
   // so the original 15-min TTL could be nearly exhausted by the time they reach consent.
   if (consumed.requestId) {
+    const existsBefore = await getAuthRequest(consumed.requestId);
+    logger.info("handoff consume: extending auth request", {
+      requestId: consumed.requestId,
+      existsInCache: !!existsBefore,
+      handoffId: consumed.handoffId
+    });
     await extendAuthRequest(consumed.requestId, 600); // fresh 10 minutes for consent
+  } else {
+    logger.warn("handoff consume: no requestId on consumed handoff", {
+      handoffId: consumed.handoffId
+    });
   }
 
   const session = await createSession(consumed.approvedBySubjectId, consumed.approvedByUsername, consumed.assurance);
