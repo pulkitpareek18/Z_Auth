@@ -159,8 +159,11 @@ export async function completeEnrollment(input: {
     throw new Error(verification.reason ?? "zk_verification_failed");
   }
 
+  // Always store the biometric commitment from publicSignals[0] (Poseidon hash),
+  // regardless of zkVerifierMode. This is required for server-side identity binding:
+  // on subsequent logins, the commitment check ensures the same biometric was used.
   let zkCommitment: string | null = null;
-  if (config.zkVerifierMode === "real" && Array.isArray(input.publicSignals)) {
+  if (Array.isArray(input.publicSignals) && input.publicSignals.length > 0) {
     zkCommitment = String(input.publicSignals[0]);
   }
 

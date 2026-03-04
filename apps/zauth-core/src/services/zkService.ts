@@ -141,6 +141,23 @@ export async function verifyZkProof(input: {
   const normalizedProof = normalizeProof(input.zkProof);
 
   if (config.zkVerifierMode === "mock") {
+    // Even in mock mode, enforce biometric commitment binding.
+    // This prevents a different person's face from passing verification
+    // because Poseidon(different_hash) won't match the stored commitment.
+    if (input.expectedCommitment) {
+      const proofCommitment = Array.isArray(normalizedSignals)
+        ? String(normalizedSignals[0])
+        : String(signalsHash);
+      if (proofCommitment !== input.expectedCommitment) {
+        return {
+          verified: false,
+          reason: "commitment_mismatch",
+          publicSignalsHash: signalsHash,
+          mode: config.zkVerifierMode
+        };
+      }
+    }
+
     const supplied = typeof normalizedProof === "string" ? normalizedProof : String((normalizedProof as Record<string, unknown>).digest ?? "");
     const expected = computeMockProofDigest(input.expectedChallengeHash, signalsHash, input.uid);
     return {
@@ -188,16 +205,24 @@ export async function verifyZkProof(input: {
       };
     }
 
-    if (input.expectedCommitment) {
-      const proofCommitment = String(normalizedSignals[0]);
-      if (proofCommitment !== input.expectedCommitment) {
-        return {
-          verified: false,
-          reason: "commitment_mismatch",
-          publicSignalsHash: signalsHash,
-          mode: config.zkVerifierMode
-        };
-      }
+    // Biometric commitment binding is mandatory — ensures the proof was generated
+    // with the same biometric hash that was used during enrollment.
+    if (!input.expectedCommitment) {
+      return {
+        verified: false,
+        reason: "commitment_required",
+        publicSignalsHash: signalsHash,
+        mode: config.zkVerifierMode
+      };
+    }
+    const proofCommitment = String(normalizedSignals[0]);
+    if (proofCommitment !== input.expectedCommitment) {
+      return {
+        verified: false,
+        reason: "commitment_mismatch",
+        publicSignalsHash: signalsHash,
+        mode: config.zkVerifierMode
+      };
     }
 
     return {

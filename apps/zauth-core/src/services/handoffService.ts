@@ -4,7 +4,7 @@ import type { AssuranceContext } from "../types/models.js";
 
 const HANDOFF_PREFIX = "handoff:";
 const HANDOFF_CODE_PREFIX = "handoff_code:";
-const HANDOFF_TTL_SECONDS = 300;
+const HANDOFF_TTL_SECONDS = 600;
 
 function generateApprovalCode(): string {
   let candidate = "";

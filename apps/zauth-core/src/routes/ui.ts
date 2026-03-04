@@ -2775,13 +2775,20 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
               lastFaceEmbedding.enrollmentHash = enrollment.biometricHash;
               log('Using enrollment biometric hash as ZK preimage');
             } else {
-              log('No on-device enrollment found — first login on this device, using live hash');
+              // No on-device enrollment: this is the first login on this device.
+              // The live face hash will be used as ZK preimage. The server-side
+              // commitment check will reject it if it doesn't match the enrolled
+              // biometric (Poseidon(live_hash) != stored zk_commitment).
+              // This is safe because the server enforces commitment binding.
+              log('No on-device enrollment found — first login on this device. Server will verify commitment.');
             }
           } catch (matchErr) {
             if (matchErr.message.includes('does not match')) {
               throw matchErr;
             }
-            log('On-device biometric lookup failed: ' + matchErr.message + ' — using live hash');
+            // IndexedDB failures are non-fatal — server-side commitment
+            // check will catch any mismatch as a backstop.
+            log('On-device biometric lookup failed: ' + matchErr.message + ' — server will verify commitment');
           }
         }
 
