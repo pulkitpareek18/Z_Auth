@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/pulkitpareek18/Z_Auth/actions/workflows/ci-main.yml"><img src="https://github.com/pulkitpareek18/Z_Auth/actions/workflows/ci-main.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/pulkitpareek18/Z_Auth/releases"><img src="https://img.shields.io/github/v/release/pulkitpareek18/Z_Auth?color=blue" alt="Release" /></a>
+  <a href="https://github.com/pulkitpareek18/Z_Auth/actions/workflows/deploy-prod.yml"><img src="https://github.com/pulkitpareek18/Z_Auth/actions/workflows/deploy-prod.yml/badge.svg" alt="Deploy" /></a>
+  <a href="https://github.com/pulkitpareek18/Z_Auth/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-v1.0.0-blue.svg" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
   <a href="https://auth.geturstyle.shop/.well-known/openid-configuration"><img src="https://img.shields.io/badge/OIDC-Compliant-green.svg" alt="OIDC" /></a>
 </p>
