@@ -1286,7 +1286,7 @@ uiRouter.get("/ui/login", async (req, res) => {
         </div>
       </section>
     </div>
-    <footer>Phone approval is primary. Passkey fallback stays available for recovery.</footer>
+    <footer></footer>
   </div>
 
   <script src="/ui/assets/passkey-utils.js"></script>
