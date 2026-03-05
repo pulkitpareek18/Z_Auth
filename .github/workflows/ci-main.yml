@@ -1,8 +1,7 @@
 name: ci-main
 
 on:
-  push:
-    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   quality:

@@ -284,8 +284,9 @@ make release
 | Workflow | Trigger | Actions |
 |----------|---------|---------|
 | `ci-pr.yml` | Pull request | Lint, type-check, test, build, Trivy scan |
-| `ci-main.yml` | Push to main | Full test suite, build, security scan |
-| `deploy-prod.yml` | Push to main | Build GHCR images, deploy to VPS, smoke test |
+| `ci-main.yml` | Manual | Full test suite, build, security scan |
+| `deploy-demo.yml` | Manual | Deploy to demo environment |
+| `deploy-prod.yml` | Push to main / tag | Build, deploy to VPS, smoke test |
 
 ## Blockchain Anchoring
 
