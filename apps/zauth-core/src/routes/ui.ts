@@ -2533,72 +2533,75 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
         // Raw embeddings NEVER leave the device.
         if (!signupMode && !enrollmentDraft && lastFaceEmbedding && activeUsername) {
           setText('liveness-state', 'Matching biometric identity...');
+
+          // Step A: Try on-device IndexedDB enrollment match
+          var onDeviceEnrollment = null;
           try {
-            const enrollment = await ZAuthFace.getEnrollmentBiometric(activeUsername);
-            if (enrollment) {
-              const match = ZAuthFace.matchDescriptors(
-                lastFaceEmbedding.descriptor,
-                enrollment.descriptor
+            onDeviceEnrollment = await ZAuthFace.getEnrollmentBiometric(activeUsername);
+          } catch (idbErr) {
+            log('IndexedDB lookup failed: ' + idbErr.message + ' — will try server-side verification');
+          }
+
+          if (onDeviceEnrollment) {
+            // On-device enrollment found — match face locally
+            const match = ZAuthFace.matchDescriptors(
+              lastFaceEmbedding.descriptor,
+              onDeviceEnrollment.descriptor
+            );
+            log('Biometric match distance: ' + match.distance.toFixed(4) + ' (threshold: 0.6)');
+            if (!match.matched) {
+              throw new Error('Face does not match enrolled identity (distance: ' + match.distance.toFixed(3) + '). Please try again or use recovery codes.');
+            }
+            // Use the ORIGINAL enrollment hash as ZK preimage
+            // This ensures Poseidon(preimage) matches the stored commitment
+            lastFaceEmbedding.enrollmentHash = onDeviceEnrollment.biometricHash;
+            log('Using enrollment biometric hash as ZK preimage');
+          } else {
+            // No on-device enrollment (new device or IndexedDB failed).
+            // Fall back to server-side quantized descriptor matching.
+            log('No on-device enrollment — attempting server-side face verification...');
+            setText('liveness-state', 'Verifying identity with server...');
+
+            const liveQuantized = quantizeEmbedding(lastFaceEmbedding.descriptor);
+            const serverVerifyResp = await fetch('/pramaan/v2/identity/verify-face', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                uid: identity.uid,
+                live_descriptor: ZAuthFace.uint8ToBase64(liveQuantized)
+              })
+            });
+            const serverVerifyData = await serverVerifyResp.json();
+
+            if (!serverVerifyResp.ok || !serverVerifyData.matched) {
+              const reason = serverVerifyData.reason || 'Unknown error';
+              if (reason === 'no_enrollment_descriptor') {
+                throw new Error('This account was enrolled before cross-device verification was available. Please use your original device or re-enroll via recovery codes.');
+              }
+              throw new Error('Face does not match enrolled identity. '
+                + (reason === 'face_mismatch' ? 'Distance: ' + (serverVerifyData.distance || '?') + '. ' : '')
+                + 'Use recovery codes or your original device.');
+            }
+
+            // Server confirmed face match — use returned enrollment_hash
+            lastFaceEmbedding.enrollmentHash = serverVerifyData.enrollment_hash;
+            log('Server-side face match confirmed (distance: ' + (serverVerifyData.distance || '?') + ')');
+
+            // Cache enrollment on this device for future logins
+            try {
+              await ZAuthFace.storeEnrollmentBiometric(
+                activeUsername, lastFaceEmbedding.descriptor, serverVerifyData.enrollment_hash
               );
-              log('Biometric match distance: ' + match.distance.toFixed(4) + ' (threshold: 0.6)');
-              if (!match.matched) {
-                throw new Error('Face does not match enrolled identity (distance: ' + match.distance.toFixed(3) + '). Please try again or use recovery codes.');
-              }
-              // Use the ORIGINAL enrollment hash as ZK preimage
-              // This ensures Poseidon(preimage) matches the stored commitment
-              lastFaceEmbedding.enrollmentHash = enrollment.biometricHash;
-              log('Using enrollment biometric hash as ZK preimage');
-            } else {
-              // No on-device enrollment: first login on this device.
-              // Use server-side quantized descriptor matching to verify identity
-              // and retrieve the enrollment hash for ZK proof construction.
-              log('No on-device enrollment — attempting server-side face verification...');
-              setText('liveness-state', 'Verifying identity with server...');
-
-              const liveQuantized = quantizeEmbedding(lastFaceEmbedding.descriptor);
-              const verifyResp = await fetch('/pramaan/v2/identity/verify-face', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  uid: identity.uid,
-                  live_descriptor: ZAuthFace.uint8ToBase64(liveQuantized)
-                })
-              });
-              const verifyData = await verifyResp.json();
-
-              if (!verifyResp.ok || !verifyData.matched) {
-                const reason = verifyData.reason || 'Unknown error';
-                if (reason === 'no_enrollment_descriptor') {
-                  throw new Error('This account was enrolled before cross-device verification was available. Please use your original device or re-enroll via recovery codes.');
-                }
-                throw new Error('Face does not match enrolled identity. '
-                  + (reason === 'face_mismatch' ? 'Distance: ' + (verifyData.distance || '?') + '. ' : '')
-                  + 'Use recovery codes or your original device.');
-              }
-
-              // Server confirmed face match — use returned enrollment_hash
-              lastFaceEmbedding.enrollmentHash = verifyData.enrollment_hash;
-              log('Server-side face match confirmed (distance: ' + (verifyData.distance || '?') + ')');
-
-              // Cache enrollment on this device for future logins (no more server calls needed)
-              try {
-                await ZAuthFace.storeEnrollmentBiometric(
-                  activeUsername, lastFaceEmbedding.descriptor, verifyData.enrollment_hash
-                );
-                log('Enrollment cached on new device for future logins.');
-              } catch (cacheErr) {
-                log('Warning: could not cache enrollment on device: ' + cacheErr.message);
-              }
+              log('Enrollment cached on new device for future logins.');
+            } catch (cacheErr) {
+              log('Warning: could not cache enrollment on device: ' + cacheErr.message);
             }
-          } catch (matchErr) {
-            if (matchErr.message.includes('does not match') ||
-                matchErr.message.includes('enrolled before cross-device') ||
-                matchErr.message.includes('recovery codes')) {
-              throw matchErr;
-            }
-            // IndexedDB failures are non-fatal — server-side commitment
-            // check will catch any mismatch as a backstop.
-            log('On-device biometric lookup failed: ' + matchErr.message + ' — server will verify commitment');
+          }
+
+          // Final guard: enrollmentHash MUST be set before proof submission.
+          // Without it, the server will reject with biometric_hash_required.
+          if (!lastFaceEmbedding.enrollmentHash) {
+            throw new Error('Could not verify biometric identity — enrollment hash unavailable. Please try again or use recovery codes.');
           }
         }
 
