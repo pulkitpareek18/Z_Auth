@@ -151,10 +151,6 @@ Desktop                    Phone                      Server
   │ ← Poll (approved) → session + consent redirect ────┤
 ```
 
-### Passkey-Only Login (AAL1)
-
-Direct WebAuthn authentication for lower-assurance contexts.
-
 ### Account Recovery
 
 1. Enter one of eight recovery codes generated at enrollment

@@ -440,110 +440,6 @@ button.danger:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none
 .stack > a.primary, .stack > a.secondary, .stack > button.primary, .stack > button.secondary, .stack > button.danger {
   width: 100%;
 }
-.passkey-column {
-  width: 100%;
-  max-width: 620px;
-  justify-self: end;
-  gap: 12px;
-}
-.passkey-header {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 13px;
-  line-height: 1.35;
-}
-.passkey-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 5px;
-  border: 1px solid var(--color-line-strong);
-  border-radius: var(--radius-pill);
-  background: var(--color-input-bg);
-}
-button.passkey-tab {
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--color-subtext);
-  border-radius: var(--radius-pill);
-  min-height: 46px;
-  padding: 0 16px;
-  font-size: 15px;
-  font-weight: 500;
-  font-family: var(--font-display);
-  cursor: pointer;
-}
-button.passkey-tab:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 1px;
-}
-button.passkey-tab.active {
-  background: var(--color-primary-bg);
-  color: var(--color-primary-text);
-  border-color: var(--color-primary-bg);
-}
-.passkey-panel {
-  display: none;
-}
-.passkey-panel.active {
-  display: block;
-}
-.status.stage.passkey-panel {
-  margin-top: 0;
-  border-radius: 18px;
-  padding: 16px 18px 20px;
-}
-.status.stage.passkey-panel.active {
-  border-color: var(--color-line-strong);
-  background: var(--color-status-bg);
-}
-.passkey-panel-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.passkey-step-index {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--color-line-strong);
-  background: var(--color-input-bg);
-  color: var(--color-subtext);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-display);
-}
-.passkey-panel.active .passkey-step-index {
-  border-color: var(--color-primary-bg);
-  background: var(--color-primary-bg);
-  color: var(--color-primary-text);
-}
-.passkey-panel-title {
-  font-size: 17px;
-  line-height: 1.2;
-  font-weight: 500;
-  color: var(--color-text);
-  font-family: var(--font-display);
-}
-.passkey-panel-note {
-  margin-top: 0;
-}
-.passkey-panel input {
-  margin-top: var(--space-2);
-}
-.passkey-panel button {
-  margin-top: 14px;
-}
-.passkey-column .actions.tight {
-  margin-top: 4px;
-}
-.passkey-back-link {
-  font-size: 15px;
-}
 .muted { color: var(--color-muted); }
 .status {
   margin-top: var(--space-4);
@@ -1067,27 +963,6 @@ footer {
   font-size: 13px;
   color: var(--color-muted);
 }
-.passkey-shell {
-  grid-template-columns: minmax(340px, 1.02fr) minmax(380px, 0.98fr);
-  gap: 34px;
-}
-.card.wide.compact .passkey-intro h1 {
-  font-size: clamp(48px, 4.9vw, 72px);
-  line-height: 1.03;
-  letter-spacing: -0.03em;
-}
-.card.wide.compact .passkey-intro h2 {
-  margin-top: 16px;
-  font-size: clamp(24px, 2.4vw, 38px);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
-  font-family: var(--font-display);
-}
-.passkey-intro .helper-line {
-  margin-top: 20px;
-  max-width: 440px;
-}
 .wait-shell {
   grid-template-columns: minmax(340px, 1.05fr) minmax(380px, 0.95fr);
   gap: 34px;
@@ -1228,15 +1103,6 @@ footer {
   .card.wide .intro h2 {
     font-size: clamp(20px, 2.2vw, 28px);
   }
-  .passkey-shell {
-    gap: var(--space-6);
-  }
-  .card.wide.compact .passkey-intro h1 {
-    font-size: clamp(40px, 4vw, 58px);
-  }
-  .card.wide.compact .passkey-intro h2 {
-    font-size: clamp(20px, 2vw, 30px);
-  }
   .wait-shell {
     gap: var(--space-6);
   }
@@ -1262,24 +1128,9 @@ footer {
     font-size: 23px;
     line-height: 1.15;
   }
-  .passkey-column {
-    justify-self: stretch;
-    max-width: 100%;
-  }
   .card.wide.compact .card-shell {
     align-items: start;
     gap: var(--space-6);
-  }
-  .passkey-shell {
-    grid-template-columns: 1fr;
-    gap: var(--space-5);
-  }
-  .card.wide.compact .passkey-intro h1 {
-    font-size: 42px;
-  }
-  .card.wide.compact .passkey-intro h2 {
-    font-size: 26px;
-    line-height: 1.16;
   }
   .wait-shell {
     grid-template-columns: 1fr;
@@ -1348,124 +1199,6 @@ footer {
 </html>`;
 }
 
-function passkeyClientLogic(requestId: string): string {
-  return `
-const requestId = ${JSON.stringify(requestId)};
-const log = (msg) => {
-  const el = document.getElementById('log');
-  if (!el) return;
-  el.textContent = msg || '';
-  el.classList.toggle('visible', Boolean(msg));
-};
-
-const modeInput = document.getElementById('passkey-mode');
-const signInPanel = document.getElementById('signin-panel');
-const signUpPanel = document.getElementById('signup-panel');
-const signInTab = document.getElementById('tab-signin');
-const signUpTab = document.getElementById('tab-signup');
-const passkeySubtitle = document.getElementById('passkey-intro-subtitle');
-const passkeyHelper = document.getElementById('passkey-intro-helper');
-
-const setTabState = (tab, active) => {
-  if (!tab) return;
-  tab.classList.toggle('active', active);
-  tab.setAttribute('aria-selected', String(active));
-  tab.setAttribute('tabindex', active ? '0' : '-1');
-};
-
-const setMode = (mode) => {
-  const isSignUp = mode === 'signup';
-  if (modeInput) modeInput.value = isSignUp ? 'signup' : 'signin';
-  if (signInPanel) signInPanel.classList.toggle('active', !isSignUp);
-  if (signUpPanel) signUpPanel.classList.toggle('active', isSignUp);
-  setTabState(signInTab, !isSignUp);
-  setTabState(signUpTab, isSignUp);
-  if (passkeySubtitle) {
-    passkeySubtitle.textContent = isSignUp ? 'Create your account with a passkey on this device.' : 'Use passkey directly on this device.';
-  }
-  if (passkeyHelper) {
-    passkeyHelper.textContent = isSignUp
-      ? 'Create your account once, then sign in quickly using your device passkey.'
-      : 'This fallback keeps access available if phone handoff is not possible.';
-  }
-};
-
-if (signInTab) signInTab.onclick = () => setMode('signin');
-if (signUpTab) signUpTab.onclick = () => setMode('signup');
-setMode(modeInput && modeInput.value === 'signup' ? 'signup' : 'signin');
-
-const { b64urlToBuffer, bufferToB64url, prepareRegisterOptions, prepareLoginOptions,
-        toRegistrationCredentialJSON, toAuthenticationCredentialJSON } = ZAuthPasskey;
-
-const regButton = document.getElementById('register-btn');
-if (regButton) {
-  regButton.onclick = async () => {
-    try {
-      const username = document.getElementById('register-username').value.trim().toLowerCase();
-      const displayName = document.getElementById('register-display').value.trim() || username;
-      if (!username) throw new Error('Username is required');
-
-      const optionsResp = await fetch('/auth/webauthn/register/options', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, displayName })
-      });
-      if (!optionsResp.ok) throw new Error('Failed to start registration');
-      const options = prepareRegisterOptions(await optionsResp.json());
-      const credential = await navigator.credentials.create({ publicKey: options });
-
-      const verifyResp = await fetch('/auth/webauthn/register/verify', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, response: toRegistrationCredentialJSON(credential), requestId })
-      });
-      const verifyData = await verifyResp.json();
-      if (!verifyResp.ok || !verifyData.verified) throw new Error('Passkey registration failed');
-      log('Passkey registered. You can now sign in.');
-      const loginUsername = document.getElementById('login-username');
-      if (loginUsername && !loginUsername.value) {
-        loginUsername.value = username;
-      }
-      setMode('signin');
-    } catch (error) {
-      log('Register error: ' + error.message);
-    }
-  };
-}
-
-const loginButton = document.getElementById('login-btn');
-if (loginButton) {
-  loginButton.onclick = async () => {
-    try {
-      const username = document.getElementById('login-username').value.trim().toLowerCase();
-      if (!username) throw new Error('Username is required');
-
-      const optionsResp = await fetch('/auth/webauthn/login/options', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username })
-      });
-      if (!optionsResp.ok) throw new Error('No passkey found for this account');
-      const options = prepareLoginOptions(await optionsResp.json());
-      const credential = await navigator.credentials.get({ publicKey: options });
-
-      const verifyResp = await fetch('/auth/webauthn/login/verify', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, response: toAuthenticationCredentialJSON(credential), requestId })
-      });
-      const verifyData = await verifyResp.json();
-      if (!verifyResp.ok || !verifyData.verified) throw new Error('Passkey authentication failed');
-
-      window.location.href = verifyData.redirectTo || '/';
-    } catch (error) {
-      log('Login error: ' + error.message);
-    }
-  };
-}
-`;
-}
-
 uiRouter.get("/", (_req, res) => {
   const body = `
   <div class="card wide">
@@ -1481,10 +1214,6 @@ uiRouter.get("/", (_req, res) => {
         <div class="stack">
           <a class="primary" href="/ui/login?mode=signin">Sign in</a>
           <a class="secondary" href="/ui/login?mode=signup">Create account</a>
-        </div>
-        <div class="actions tight">
-          <a class="link" href="/ui/passkey">Use passkey directly</a>
-          <span></span>
         </div>
       </section>
     </div>
@@ -1553,7 +1282,6 @@ uiRouter.get("/ui/login", async (req, res) => {
         </div>
 
         <div class="actions tight">
-          <a class="link" href="/ui/passkey${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}">Try another way</a>
           <a class="link" href="/ui/recovery${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}">Lost your device?</a>
         </div>
       </section>
@@ -1648,7 +1376,6 @@ uiRouter.get("/ui/handoff/wait", (req, res) => {
         <h2>${mode === "signup" ? "Complete setup as" : "Continue as"}<span class="wait-account">${escapeHtml(email || "your account")}</span></h2>
         <div id="status" class="status wait-status">Waiting for phone approval...</div>
         <div class="actions wait-actions">
-          <a class="link" href="/ui/passkey${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}">Try another way</a>
           <button class="secondary" id="retry-btn">Restart</button>
         </div>
       </section>
@@ -3289,65 +3016,6 @@ uiRouter.get("/ui/mobile-approve", async (req, res) => {
 
   res.type("html").send(layout("Z Auth Phone Approval", body));
 });
-uiRouter.get("/ui/passkey", (req, res) => {
-  const requestId = String(req.query.request_id || "");
-  const mode = String(req.query.mode || "signin").toLowerCase() === "signup" ? "signup" : "signin";
-  const body = `
-  <div class="card wide compact">
-    <div class="card-shell passkey-shell">
-      <section class="intro passkey-intro">
-        ${brandLockup()}
-        <h1>Try another way</h1>
-        <h2 id="passkey-intro-subtitle">Use passkey directly on this device.</h2>
-        <div id="passkey-intro-helper" class="helper-line">This fallback keeps access available if phone handoff is not possible.</div>
-      </section>
-      <section class="stack passkey-column">
-        <input type="hidden" id="passkey-mode" value="${mode}" />
-        <small class="passkey-header">Use this secure fallback when phone verification is unavailable.</small>
-        <div class="passkey-switch" role="tablist" aria-label="Passkey action">
-          <button id="tab-signin" class="passkey-tab" type="button" role="tab" aria-controls="signin-panel">Sign in</button>
-          <button id="tab-signup" class="passkey-tab" type="button" role="tab" aria-controls="signup-panel">Create account</button>
-        </div>
-
-        <div id="signin-panel" class="status stage passkey-panel" role="tabpanel" aria-labelledby="tab-signin">
-          <div class="passkey-panel-head">
-            <span class="passkey-step-index">1</span>
-            <span class="passkey-panel-title">Sign in with your passkey</span>
-          </div>
-          <div class="helper-line passkey-panel-note">Use the same account that was previously enrolled.</div>
-          <input id="login-username" autocomplete="username" placeholder="founder@geturstyle.shop" />
-          <button class="primary" id="login-btn">Sign in with passkey</button>
-        </div>
-
-        <div id="signup-panel" class="status stage passkey-panel" role="tabpanel" aria-labelledby="tab-signup">
-          <div class="passkey-panel-head">
-            <span class="passkey-step-index">1</span>
-            <span class="passkey-panel-title">Create account with passkey</span>
-          </div>
-          <div class="helper-line passkey-panel-note">Register a new passkey on this device for fast future sign-ins.</div>
-          <input id="register-username" autocomplete="username" placeholder="founder@geturstyle.shop" />
-          <input id="register-display" placeholder="Display name" />
-          <button class="primary" id="register-btn">Create account with passkey</button>
-        </div>
-
-        <div class="actions tight">
-          <a class="link passkey-back-link" href="/ui/login${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}">Back to phone verification</a>
-          <a class="link" href="/ui/recovery${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}">Lost your device?</a>
-        </div>
-      </section>
-    </div>
-
-    <pre id="log" class="log-panel" aria-live="polite"></pre>
-  </div>
-
-  <script>
-  ${passkeyClientLogic(requestId)}
-  </script>
-  `;
-
-  res.type("html").send(layout("Z Auth Passkey", body));
-});
-
 // ── Account Recovery ──────────────────────────────────────────────
 
 uiRouter.get("/ui/recovery", (req, res) => {
