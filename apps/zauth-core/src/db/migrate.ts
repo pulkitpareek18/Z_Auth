@@ -67,6 +67,14 @@ const migrations: Migration[] = [
         SELECT 1 FROM pramaan_identity_map p WHERE p.subject_id = u.subject_id
       );
     `
+  },
+  {
+    id: "008",
+    name: "add_chain_tx_hash",
+    sql: `
+      ALTER TABLE identity_commitment_log ADD COLUMN IF NOT EXISTS chain_tx_hash TEXT;
+      ALTER TABLE zk_proof_receipts ADD COLUMN IF NOT EXISTS chain_tx_hash TEXT;
+    `
   }
 ];
 

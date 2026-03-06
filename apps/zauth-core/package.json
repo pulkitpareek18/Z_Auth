@@ -10,7 +10,8 @@
     "zk:check": "node scripts/zk-check.mjs",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "anchor:deploy": "node scripts/deploy-anchor.mjs"
+    "anchor:deploy": "node scripts/deploy-anchor.mjs",
+    "identity:deploy": "node scripts/deploy-identity.mjs"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.2.2",

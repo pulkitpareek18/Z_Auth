@@ -6,6 +6,7 @@ import { randomId, sha256 } from "../utils/crypto.js";
 import { getCache } from "./cacheService.js";
 import { signAttestationJwt } from "./keyService.js";
 import { hexToFieldElement, verifyZkProof } from "./zkService.js";
+import { enrollOnChain, verifyOnChain } from "./identityChainService.js";
 import { logger } from "../utils/logger.js";
 
 const ENROLLMENT_PREFIX = "pramaan:v2:enrollment:";
@@ -242,18 +243,37 @@ export async function completeEnrollment(input: {
      FROM identity_commitment_log WHERE uid = $1`,
     [draft.uidDraft]
   );
+  const commitmentLogVersion = versionResult.rows[0]?.next_version ?? 1;
   await pool.query(
     `INSERT INTO identity_commitment_log (uid, did, version, hash1, hash2, commitment_root, circuit_id, subject_id, tenant_id, zk_commitment, prev_commitment_root)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       draft.uidDraft, draft.didDraft,
-      versionResult.rows[0]?.next_version ?? 1,
+      commitmentLogVersion,
       input.hash1, input.hash2, input.commitmentRoot,
       draft.circuitId, draft.subjectId, draft.tenantId,
       zkCommitment,
       versionResult.rows[0]?.prev_root ?? null
     ]
   );
+
+  // On-chain enrollment: submit ZK proof + identity commitment to Base.
+  // Non-blocking — if the chain call fails, enrollment still succeeds server-side.
+  if (config.identityChainEnabled && zkCommitment) {
+    const chainTxHash = await enrollOnChain({
+      uid: draft.uidDraft,
+      commitmentRoot: input.commitmentRoot,
+      zkCommitment,
+      zkProof: input.zkProof,
+      publicSignals: input.publicSignals
+    });
+    if (chainTxHash) {
+      await pool.query(
+        `UPDATE identity_commitment_log SET chain_tx_hash = $1 WHERE uid = $2 AND version = $3`,
+        [chainTxHash, draft.uidDraft, commitmentLogVersion]
+      );
+    }
+  }
 
   // Only regenerate recovery codes on fresh enrollment or face-verified recovery.
   // Multi-code recovery skips this so the attacker can't mint fresh codes.
@@ -480,6 +500,22 @@ export async function submitProof(input: {
       verification.publicSignalsHash
     ]
   );
+
+  // On-chain proof verification: submit to Base for public auditability.
+  // Non-blocking — if the chain call fails, server-side verification still stands.
+  if (config.identityChainEnabled && verification.verified) {
+    const chainTxHash = await verifyOnChain({
+      uid: request.uid,
+      zkProof: input.zkProof,
+      publicSignals: input.publicSignals
+    });
+    if (chainTxHash) {
+      await pool.query(
+        `UPDATE zk_proof_receipts SET chain_tx_hash = $1 WHERE verification_id = $2`,
+        [chainTxHash, verificationId]
+      );
+    }
+  }
 
   if (!verification.verified) {
     return {

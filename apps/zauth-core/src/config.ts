@@ -43,6 +43,10 @@ const schema = z.object({
   ANCHOR_PRIVATE_KEY: z.string().optional(),
   ANCHOR_IPFS_API: z.string().optional(),
   ANCHOR_PINATA_JWT: z.string().optional(),
+  IDENTITY_CHAIN_ENABLED: z.string().default("false"),
+  IDENTITY_CHAIN_RPC_URL: z.string().optional(),
+  IDENTITY_CHAIN_CONTRACT: z.string().optional(),
+  IDENTITY_CHAIN_PRIVATE_KEY: z.string().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   ADMIN_API_KEY: z.string().optional()
 });
@@ -92,5 +96,9 @@ export const config = {
   anchorPrivateKey: env.ANCHOR_PRIVATE_KEY,
   anchorIpfsApi: env.ANCHOR_IPFS_API,
   anchorPinataJwt: env.ANCHOR_PINATA_JWT,
+  identityChainEnabled: env.IDENTITY_CHAIN_ENABLED === "true",
+  identityChainRpcUrl: env.IDENTITY_CHAIN_RPC_URL,
+  identityChainContract: env.IDENTITY_CHAIN_CONTRACT,
+  identityChainPrivateKey: env.IDENTITY_CHAIN_PRIVATE_KEY,
   logLevel: env.LOG_LEVEL
 } as const;
